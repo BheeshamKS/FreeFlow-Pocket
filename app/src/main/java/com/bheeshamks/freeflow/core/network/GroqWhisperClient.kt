@@ -38,6 +38,18 @@ class GroqWhisperClient(
                 .retryOnConnectionFailure(true)
                 .build()
         }
+
+        private fun logDebug(tag: String, message: String) {
+            try { Log.d(tag, message) } catch (_: Throwable) { println("[$tag] $message") }
+        }
+
+        private fun logInfo(tag: String, message: String) {
+            try { Log.i(tag, message) } catch (_: Throwable) { println("[$tag] $message") }
+        }
+
+        private fun logError(tag: String, message: String, throwable: Throwable? = null) {
+            try { Log.e(tag, message, throwable) } catch (_: Throwable) { System.err.println("[$tag] $message: $throwable") }
+        }
     }
 
     /**
@@ -88,7 +100,7 @@ class GroqWhisperClient(
                 .post(requestBody)
                 .build()
 
-            Log.d(TAG, "Streaming ${wavBytes.size} bytes audio to Groq Whisper ($model)...")
+            logDebug(TAG, "Streaming ${wavBytes.size} bytes audio to Groq Whisper ($model)...")
 
             client.newCall(request).execute().use { response ->
                 val latency = System.currentTimeMillis() - startTime
@@ -101,24 +113,24 @@ class GroqWhisperClient(
                     } catch (e: Exception) {
                         responseBody.ifBlank { "HTTP ${response.code}" }
                     }
-                    Log.e(TAG, "Groq transcription failed [HTTP ${response.code}]: $errorMessage")
+                    logError(TAG, "Groq transcription failed [HTTP ${response.code}]: $errorMessage")
                     throw GroqApiException(response.code, errorMessage)
                 }
 
                 val json = JSONObject(responseBody)
                 val rawText = json.optString("text", "").trim()
-                Log.i(TAG, "Transcription completed in ${latency}ms: '$rawText'")
+                logInfo(TAG, "Transcription completed in ${latency}ms: '$rawText'")
 
                 TranscriptionResult(text = rawText, latencyMs = latency)
             }
         }.recoverCatching { throwable ->
             when (throwable) {
                 is SocketTimeoutException -> {
-                    Log.e(TAG, "Groq Whisper API request timed out", throwable)
+                    logError(TAG, "Groq Whisper API request timed out", throwable)
                     throw IOException("Connection to Groq timed out. Please check your network.", throwable)
                 }
                 is UnknownHostException -> {
-                    Log.e(TAG, "Unable to resolve Groq host", throwable)
+                    logError(TAG, "Unable to resolve Groq host", throwable)
                     throw IOException("No internet connection available.", throwable)
                 }
                 else -> throw throwable

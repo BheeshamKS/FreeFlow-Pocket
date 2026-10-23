@@ -9,7 +9,6 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import java.util.concurrent.TimeUnit
 
 class GroqWhisperClientTest {
 
@@ -44,7 +43,7 @@ class GroqWhisperClientTest {
         val dummyWav = ByteArray(44 + 3200)
         val result = client.transcribe(dummyWav)
 
-        assertTrue("Expected successful transcription", result.isSuccess)
+        assertTrue("Expected successful transcription: ${result.exceptionOrNull()?.message}", result.isSuccess)
         val transcription = result.getOrThrow()
         assertEquals("Hello FreeFlow for Android", transcription.text)
         assertTrue("Latency should be non-negative", transcription.latencyMs >= 0)
@@ -74,7 +73,8 @@ class GroqWhisperClientTest {
         val result = client.transcribe(ByteArray(44))
         assertTrue("Expected failure on 401", result.isFailure)
         val exception = result.exceptionOrNull()
-        assertTrue(exception?.message?.contains("401") == true || exception?.message?.contains("Invalid API Key") == true)
+        val msg = exception?.message ?: ""
+        assertTrue("Error should mention 401 or Invalid API Key: $msg", msg.contains("401") || msg.contains("Invalid API Key"))
     }
 
     @Test
@@ -94,7 +94,8 @@ class GroqWhisperClientTest {
         val result = client.transcribe(ByteArray(44))
         assertTrue("Expected failure on 429", result.isFailure)
         val exception = result.exceptionOrNull()
-        assertTrue(exception?.message?.contains("Rate limit") == true || exception?.message?.contains("429") == true)
+        val msg = exception?.message ?: ""
+        assertTrue("Error should mention Rate limit or 429: $msg", msg.contains("Rate limit") || msg.contains("429"))
     }
 
     @Test
