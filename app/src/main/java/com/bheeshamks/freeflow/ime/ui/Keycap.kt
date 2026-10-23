@@ -69,7 +69,8 @@ fun Keycap(
     val scope = rememberCoroutineScope()
 
     var isPressed by remember { mutableStateOf(false) }
-    var rootPosition by remember { mutableStateOf(Offset.Zero) }
+    var rootTopLeft by remember { mutableStateOf(Offset.Zero) }
+    var rootCenter by remember { mutableStateOf(Offset.Zero) }
 
     fun playHaptic() {
         if (hapticStrength == HapticStrength.OFF) return
@@ -109,7 +110,8 @@ fun Keycap(
             .padding(horizontal = 2.5.dp, vertical = 3.dp)
             .onGloballyPositioned { coordinates ->
                 val bounds = coordinates.boundsInRoot()
-                rootPosition = bounds.center
+                rootTopLeft = bounds.topLeft
+                rootCenter = bounds.center
             }
             .clip(RoundedCornerShape(cornerRadius))
             .background(backgroundColor)
@@ -126,7 +128,7 @@ fun Keycap(
                             isPressed = true
                             playHaptic()
                             keysCafeController?.triggerBloom(
-                                offset = rootPosition + (offset - Offset(size.width / 2f, size.height / 2f)),
+                                offset = rootTopLeft + offset,
                                 colorPreset = com.bheeshamks.freeflow.core.data.model.BloomColorPreset.ICY_BLUE,
                                 style = com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle.RADIAL_BLOOM,
                                 maxRadiusPx = 250f,
@@ -147,7 +149,7 @@ fun Keycap(
                             isPressed = true
                             playHaptic()
                             keysCafeController?.triggerBloom(
-                                offset = rootPosition,
+                                offset = rootTopLeft + offset,
                                 colorPreset = com.bheeshamks.freeflow.core.data.model.BloomColorPreset.ICY_BLUE,
                                 style = com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle.RADIAL_BLOOM,
                                 maxRadiusPx = 250f,
@@ -179,7 +181,7 @@ fun Keycap(
                             isPressed = true
                             playHaptic()
                             keysCafeController?.triggerBloom(
-                                offset = rootPosition,
+                                offset = rootTopLeft + offset,
                                 colorPreset = com.bheeshamks.freeflow.core.data.model.BloomColorPreset.ICY_BLUE,
                                 style = com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle.RADIAL_BLOOM,
                                 maxRadiusPx = 250f,

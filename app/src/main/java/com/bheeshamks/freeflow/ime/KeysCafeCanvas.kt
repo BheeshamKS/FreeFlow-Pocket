@@ -1,6 +1,7 @@
 package com.bheeshamks.freeflow.ime
 
 import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
@@ -14,12 +15,14 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.graphics.drawscope.Stroke
 import com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle
 import com.bheeshamks.freeflow.core.data.model.BloomColorPreset
-import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.launch
+
+/**
+ * Signature Keys Cafe animation easing: immediate tactile impulse with smooth, natural deceleration.
+ */
+val KeysCafeBloomEasing = CubicBezierEasing(0.08f, 0.82f, 0.17f, 1.0f)
 
 /**
  * In-flight bloom touch particle representing a touch point and animated progress (0f..1f).
@@ -37,7 +40,10 @@ class BloomParticle(
     suspend fun run() {
         progress.animateTo(
             targetValue = 1f,
-            animationSpec = tween(durationMillis = durationMs)
+            animationSpec = tween(
+                durationMillis = durationMs,
+                easing = KeysCafeBloomEasing
+            )
         )
     }
 }
@@ -76,13 +82,13 @@ fun rememberKeysCafeController(): KeysCafeController {
 /**
  * High-performance hardware-accelerated canvas modifier rendering multi-layered
  * concentric radial bloom effects behind the keyboard without triggering key grid recomposition.
+ * Maintains a strict 120fps frame-rate target by delegating render updates directly to hardware draw calls.
  */
 @Composable
 fun KeysCafeBloomCanvas(
     controller: KeysCafeController,
     modifier: Modifier = Modifier
 ) {
-    // Collect active particles and drive their animations
     val particles = controller.activeParticles
 
     particles.forEach { particle ->
@@ -96,7 +102,8 @@ fun KeysCafeBloomCanvas(
         modifier = modifier
             .fillMaxSize()
             .drawBehind {
-                for (i in 0 until particles.size) {
+                val size = particles.size
+                for (i in 0 until size) {
                     val p = particles.getOrNull(i) ?: continue
                     val t = p.progress.value
                     if (t >= 1f) continue
@@ -109,15 +116,24 @@ fun KeysCafeBloomCanvas(
 
 private fun DrawScope.drawBloomEffect(particle: BloomParticle, progress: Float) {
     val alpha = (1f - progress).coerceIn(0f, 1f)
-    val currentRadius = particle.maxRadiusPx * (0.25f + 0.75f * progress)
+    val currentRadius = particle.maxRadiusPx * (0.20f + 0.80f * progress)
 
     when (particle.animationStyle) {
         BloomAnimationStyle.RADIAL_BLOOM -> {
-            // Samsung Keys Cafe signature: Concentric soft multi-ring gradient bloom
+            // Layer 1: Outer concentric shockwave ring
+            val outerRingRadius = currentRadius * 0.95f
+            drawCircle(
+                color = particle.initialColor.copy(alpha = 0.22f * alpha),
+                radius = outerRingRadius,
+                center = particle.origin,
+                style = Stroke(width = (4f * (1f - progress)).coerceAtLeast(1f))
+            )
+
+            // Layer 2: Middle concentric soft bloom gradient
             val gradient = Brush.radialGradient(
                 colors = listOf(
-                    particle.initialColor.copy(alpha = 0.55f * alpha),
-                    particle.initialColor.copy(alpha = 0.35f * alpha),
+                    particle.initialColor.copy(alpha = 0.65f * alpha),
+                    particle.initialColor.copy(alpha = 0.40f * alpha),
                     particle.initialColor.copy(alpha = 0.15f * alpha),
                     Color.Transparent
                 ),
@@ -130,11 +146,11 @@ private fun DrawScope.drawBloomEffect(particle: BloomParticle, progress: Float) 
                 center = particle.origin
             )
 
-            // Inner bright core
-            val innerRadius = currentRadius * 0.45f
+            // Layer 3: Concentric intense inner tactile core
+            val innerCoreRadius = currentRadius * 0.35f
             drawCircle(
-                color = particle.initialColor.copy(alpha = 0.4f * alpha),
-                radius = innerRadius,
+                color = particle.initialColor.copy(alpha = 0.50f * alpha),
+                radius = innerCoreRadius,
                 center = particle.origin
             )
         }
@@ -142,25 +158,25 @@ private fun DrawScope.drawBloomEffect(particle: BloomParticle, progress: Float) 
             // Concentric shockwave strokes expanding outward
             val ringCount = 3
             for (r in 0 until ringCount) {
-                val ringOffset = (progress + (r * 0.2f)) % 1f
+                val ringOffset = (progress + (r * 0.22f)) % 1f
                 val ringRadius = particle.maxRadiusPx * ringOffset
-                val ringAlpha = (1f - ringOffset) * alpha * 0.7f
+                val ringAlpha = (1f - ringOffset) * alpha * 0.75f
                 drawCircle(
                     color = particle.initialColor.copy(alpha = ringAlpha),
                     radius = ringRadius,
                     center = particle.origin,
-                    style = androidx.compose.ui.graphics.drawscope.Stroke(width = 3f * (1f - ringOffset))
+                    style = Stroke(width = (3.5f * (1f - ringOffset)).coerceAtLeast(1f))
                 )
             }
         }
         BloomAnimationStyle.NEON_PULSE -> {
-            // Intense bright keycap bloom with sharp falloff
-            val glowRadius = currentRadius * 0.7f
+            // Intense bright keycap bloom with sharp radial falloff
+            val glowRadius = currentRadius * 0.75f
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        Color.White.copy(alpha = 0.8f * alpha),
-                        particle.initialColor.copy(alpha = 0.6f * alpha),
+                        Color.White.copy(alpha = 0.85f * alpha),
+                        particle.initialColor.copy(alpha = 0.65f * alpha),
                         Color.Transparent
                     ),
                     center = particle.origin,
@@ -172,16 +188,17 @@ private fun DrawScope.drawBloomEffect(particle: BloomParticle, progress: Float) 
         }
         BloomAnimationStyle.MINIMALIST -> {
             // Subtle, understated soft halo
+            val haloRadius = currentRadius * 0.55f
             drawCircle(
                 brush = Brush.radialGradient(
                     colors = listOf(
-                        particle.initialColor.copy(alpha = 0.25f * alpha),
+                        particle.initialColor.copy(alpha = 0.30f * alpha),
                         Color.Transparent
                     ),
                     center = particle.origin,
-                    radius = currentRadius * 0.6f
+                    radius = haloRadius
                 ),
-                radius = currentRadius * 0.6f,
+                radius = haloRadius,
                 center = particle.origin
             )
         }

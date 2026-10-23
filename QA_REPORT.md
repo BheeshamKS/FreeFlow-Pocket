@@ -18,8 +18,8 @@ This report tracks the multi-phase autonomous audit, fortification, and polish o
 | Phase | Description | Status | Key Improvements |
 | :--- | :--- | :---: | :--- |
 | **Phase 1** | Compile & Architecture Audit | 🟢 Complete | Dual-anchored ViewTree lifecycle tree, ViewCompositionStrategy, OkHttp callTimeout/runCatching fortification |
-| **Phase 2** | Keys Cafe Animation Polish | 🟡 In Progress | Exact `Offset` touch math, `CubicBezierEasing`, 120fps hardware draw loops |
-| **Phase 3** | Edge Case Fortification | ⚪ Pending | Buffer overflow caps, Keyguard lock-screen tile handling, WebView clipboard resilience |
+| **Phase 2** | Keys Cafe Animation Polish | 🟢 Complete | Exact `rootTopLeft + offset` touch alignment, `KeysCafeBloomEasing` (CubicBezierEasing), 3-layer concentric shockwave render loop |
+| **Phase 3** | Edge Case Fortification | 🟡 In Progress | Buffer overflow caps, Keyguard lock-screen tile handling, WebView clipboard resilience |
 | **Phase 4** | Test Generation & Formatting | ⚪ Pending | Unit tests, MockWebServer tests, Smartbar UI tests, formatting passes |
 
 ---
