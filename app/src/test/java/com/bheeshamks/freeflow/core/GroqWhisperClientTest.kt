@@ -125,4 +125,19 @@ class GroqWhisperClientTest {
         assertTrue(exception is IllegalArgumentException)
         assertEquals(0, server.requestCount)
     }
+
+    @Test
+    fun testJsonTextParsingFallback() {
+        val sampleJson = """{"text": "The quick brown fox jumps over the lazy dog."}"""
+        val parsed = GroqWhisperClient.parseJsonText(sampleJson)
+        assertEquals("The quick brown fox jumps over the lazy dog.", parsed)
+
+        val escapedJson = """{"text": "Line 1\nLine 2 with \"quotes\""}"""
+        val parsedEscaped = GroqWhisperClient.parseJsonText(escapedJson)
+        assertTrue(parsedEscaped.contains("quotes"))
+
+        val errorJson = """{"error": {"message": "Invalid API Key"}}"""
+        val extractedMessage = GroqWhisperClient.extractJsonField(errorJson, "message")
+        assertEquals("Invalid API Key", extractedMessage)
+    }
 }

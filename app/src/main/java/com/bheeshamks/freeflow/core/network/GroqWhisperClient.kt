@@ -50,6 +50,39 @@ class GroqWhisperClient(
         private fun logError(tag: String, message: String, throwable: Throwable? = null) {
             try { Log.e(tag, message, throwable) } catch (_: Throwable) { System.err.println("[$tag] $message: $throwable") }
         }
+
+        /**
+         * Safely extracts the transcription text from Groq Whisper JSON response,
+         * with defensive fallback to manual JSON key parsing for JVM unit tests or stub environments.
+         */
+        internal fun parseJsonText(responseBody: String): String {
+            if (responseBody.isBlank()) return ""
+            val parsedText = try {
+                val json = JSONObject(responseBody)
+                json.optString("text", null)
+            } catch (_: Throwable) {
+                null
+            }
+            if (!parsedText.isNullOrBlank()) {
+                return parsedText.trim()
+            }
+            return extractJsonField(responseBody, "text").trim()
+        }
+
+        /**
+         * Safely extracts string value for a given JSON key using regex matching.
+         */
+        internal fun extractJsonField(jsonString: String, key: String): String {
+            val regex = Regex("\"$key\"\\s*:\\s*\"((?:\\\\\"|[^\"])*)\"")
+            val match = regex.find(jsonString)
+            return match?.groups?.get(1)?.value
+                ?.replace("\\\"", "\"")
+                ?.replace("\\\\", "\\")
+                ?.replace("\\n", "\n")
+                ?.replace("\\r", "\r")
+                ?.replace("\\t", "\t")
+                ?: ""
+        }
     }
 
     /**
@@ -109,16 +142,17 @@ class GroqWhisperClient(
                 if (!response.isSuccessful) {
                     val errorMessage = try {
                         val json = JSONObject(responseBody)
-                        json.optJSONObject("error")?.optString("message") ?: responseBody
-                    } catch (e: Exception) {
-                        responseBody.ifBlank { "HTTP ${response.code}" }
-                    }
+                        val errObj = json.optJSONObject("error")
+                        errObj?.optString("message", null) ?: extractJsonField(responseBody, "message")
+                    } catch (_: Throwable) {
+                        extractJsonField(responseBody, "message")
+                    }.ifBlank { responseBody.ifBlank { "HTTP ${response.code}" } }
+
                     logError(TAG, "Groq transcription failed [HTTP ${response.code}]: $errorMessage")
                     throw GroqApiException(response.code, errorMessage)
                 }
 
-                val json = JSONObject(responseBody)
-                val rawText = json.optString("text", "").trim()
+                val rawText = parseJsonText(responseBody)
                 logInfo(TAG, "Transcription completed in ${latency}ms: '$rawText'")
 
                 TranscriptionResult(text = rawText, latencyMs = latency)
@@ -162,16 +196,21 @@ class GroqWhisperClient(
                 if (!response.isSuccessful) {
                     val errorMessage = try {
                         val json = JSONObject(responseBody)
-                        json.optJSONObject("error")?.optString("message") ?: "HTTP ${response.code}"
-                    } catch (e: Exception) {
-                        "HTTP ${response.code}"
-                    }
+                        val errObj = json.optJSONObject("error")
+                        errObj?.optString("message", null) ?: extractJsonField(responseBody, "message")
+                    } catch (_: Throwable) {
+                        extractJsonField(responseBody, "message")
+                    }.ifBlank { "HTTP ${response.code}" }
                     throw GroqApiException(response.code, errorMessage)
                 }
 
-                val json = JSONObject(responseBody)
-                val dataArray = json.optJSONArray("data")
-                dataArray?.length() ?: 0
+                val modelCount = try {
+                    val json = JSONObject(responseBody)
+                    json.optJSONArray("data")?.length() ?: 0
+                } catch (_: Throwable) {
+                    Regex("\"id\"\\s*:").findAll(responseBody).count()
+                }
+                modelCount
             }
         }.recoverCatching { throwable ->
             when (throwable) {
