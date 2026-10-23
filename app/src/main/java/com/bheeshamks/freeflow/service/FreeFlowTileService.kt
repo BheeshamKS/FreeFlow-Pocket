@@ -23,8 +23,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Ninja Mode Quick Settings Tile Service.
- * Tapping the tile starts background audio capture; tapping again transcribes the speech via Groq LPU,
- * copies the text straight into the system Clipboard, plays a tactile haptic, and notifies the user.
+ * Fortified with Keyguard lock-screen awareness (unlockAndRun) and clipboard fallback.
  */
 class FreeFlowTileService : TileService() {
 
@@ -61,6 +60,17 @@ class FreeFlowTileService : TileService() {
     override fun onClick() {
         super.onClick()
 
+        // Fortification: Check if the device is currently locked
+        if (isLocked) {
+            unlockAndRun {
+                handleTileAction()
+            }
+        } else {
+            handleTileAction()
+        }
+    }
+
+    private fun handleTileAction() {
         if (!apiKeyStore.hasApiKey()) {
             Toast.makeText(this, "FreeFlow: Please configure Groq API Key first", Toast.LENGTH_LONG).show()
             return
@@ -122,7 +132,7 @@ class FreeFlowTileService : TileService() {
                         Log.e(TAG, "Quick Settings transcription failed", error)
                         Toast.makeText(
                             this@FreeFlowTileService,
-                            "FreeFlow: Transcription error",
+                            "FreeFlow: Transcription error (${error.message ?: "network failure"})",
                             Toast.LENGTH_SHORT
                         ).show()
                     }

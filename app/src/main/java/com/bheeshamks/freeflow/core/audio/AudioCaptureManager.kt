@@ -20,7 +20,7 @@ import kotlin.math.sqrt
  * Thread-safe real-time audio capture engine.
  * Records 16kHz, 16-bit mono PCM via Android [AudioRecord] directly into memory,
  * emitting real-time normalized audio amplitude (0.0f..1.0f) at 60fps to drive UI waveforms.
- * Converts recorded audio into in-memory .wav byte array on stop without touching flash storage.
+ * Fortified with buffer-overflow circuit breakers and memory safety guards.
  */
 class AudioCaptureManager(
     private val sampleRate: Int = 16000,
@@ -30,6 +30,8 @@ class AudioCaptureManager(
     companion object {
         private const val TAG = "AudioCaptureManager"
         private const val MAX_PCM_AMPLITUDE = 32767f
+        // Defensive circuit breaker: cap audio buffer at 8MB (~4.1 minutes of continuous 16kHz speech)
+        const val MAX_AUDIO_BUFFER_BYTES = 8 * 1024 * 1024
     }
 
     private val _isRecording = MutableStateFlow(false)
@@ -60,11 +62,13 @@ class AudioCaptureManager(
             return true
         }
 
-        audioOutputStream.reset()
+        synchronized(audioOutputStream) {
+            audioOutputStream.reset()
+        }
         _amplitude.value = 0f
 
         try {
-            val bufferSize = minBufferSize * 2
+            val bufferSize = (minBufferSize * 2).coerceAtLeast(4096)
             val record = AudioRecord(
                 MediaRecorder.AudioSource.VOICE_RECOGNITION,
                 sampleRate,
@@ -92,7 +96,13 @@ class AudioCaptureManager(
                         val bytesRead = record.read(buffer, 0, buffer.size)
                         if (bytesRead > 0) {
                             synchronized(audioOutputStream) {
-                                audioOutputStream.write(buffer, 0, bytesRead)
+                                // Circuit breaker: prevent OutOfMemoryError if user forgets to stop
+                                if (audioOutputStream.size() + bytesRead <= MAX_AUDIO_BUFFER_BYTES) {
+                                    audioOutputStream.write(buffer, 0, bytesRead)
+                                } else {
+                                    Log.w(TAG, "Maximum audio buffer limit reached ($MAX_AUDIO_BUFFER_BYTES bytes). Capping capture.")
+                                    return@launch
+                                }
                             }
 
                             // Calculate RMS amplitude at ~60fps (every ~16ms)
@@ -115,6 +125,10 @@ class AudioCaptureManager(
 
             Log.i(TAG, "Audio capture started at $sampleRate Hz mono PCM.")
             return true
+        } catch (e: SecurityException) {
+            Log.e(TAG, "RECORD_AUDIO permission missing or revoked", e)
+            cleanup()
+            return false
         } catch (e: Exception) {
             Log.e(TAG, "Exception starting audio recording", e)
             cleanup()
@@ -200,7 +214,6 @@ class AudioCaptureManager(
 
         for (i in 0 until bytesRead step 2) {
             if (i + 1 < bytesRead) {
-                // Little-endian 16-bit signed sample
                 val sample = ((buffer[i + 1].toInt() shl 8) or (buffer[i].toInt() and 0xFF)).toShort()
                 sum += sample * sample
             }
