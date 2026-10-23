@@ -9,6 +9,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
+import java.util.concurrent.TimeUnit
 
 class GroqWhisperClientTest {
 
@@ -40,7 +41,7 @@ class GroqWhisperClientTest {
             baseUrl = server.url("/openai/v1/").toString()
         )
 
-        val dummyWav = ByteArray(44 + 3200) // Dummy WAV bytes
+        val dummyWav = ByteArray(44 + 3200)
         val result = client.transcribe(dummyWav)
 
         assertTrue("Expected successful transcription", result.isSuccess)
@@ -74,5 +75,53 @@ class GroqWhisperClientTest {
         assertTrue("Expected failure on 401", result.isFailure)
         val exception = result.exceptionOrNull()
         assertTrue(exception?.message?.contains("401") == true || exception?.message?.contains("Invalid API Key") == true)
+    }
+
+    @Test
+    fun testRateLimit429ReturnsDescriptiveError() = runBlocking {
+        server.enqueue(
+            MockResponse()
+                .setResponseCode(429)
+                .setBody("""{"error":{"message":"Rate limit reached","type":"rate_limit_exceeded"}}""")
+                .setHeader("Content-Type", "application/json")
+        )
+
+        val client = GroqWhisperClient(
+            apiKeyProvider = { "gsk_valid_key" },
+            baseUrl = server.url("/openai/v1/").toString()
+        )
+
+        val result = client.transcribe(ByteArray(44))
+        assertTrue("Expected failure on 429", result.isFailure)
+        val exception = result.exceptionOrNull()
+        assertTrue(exception?.message?.contains("Rate limit") == true || exception?.message?.contains("429") == true)
+    }
+
+    @Test
+    fun testBlankApiKeyFailsImmediatelyWithoutNetworkCall() = runBlocking {
+        val client = GroqWhisperClient(
+            apiKeyProvider = { "" },
+            baseUrl = server.url("/openai/v1/").toString()
+        )
+
+        val result = client.transcribe(ByteArray(44))
+        assertTrue("Expected failure for blank API key", result.isFailure)
+        val exception = result.exceptionOrNull()
+        assertTrue(exception is IllegalStateException)
+        assertEquals(0, server.requestCount)
+    }
+
+    @Test
+    fun testEmptyAudioFailsImmediatelyWithoutNetworkCall() = runBlocking {
+        val client = GroqWhisperClient(
+            apiKeyProvider = { "gsk_key" },
+            baseUrl = server.url("/openai/v1/").toString()
+        )
+
+        val result = client.transcribe(ByteArray(0))
+        assertTrue("Expected failure for empty audio", result.isFailure)
+        val exception = result.exceptionOrNull()
+        assertTrue(exception is IllegalArgumentException)
+        assertEquals(0, server.requestCount)
     }
 }
