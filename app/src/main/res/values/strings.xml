@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">FreeFlow</string>
+    <string name="accessibility_service_description">FreeFlow displays a floating voice dictation bubble over text fields and pastes your transcribed speech at the cursor. FreeFlow never collects passwords or personal keystrokes.</string>
+    <string name="ime_name">FreeFlow Keyboard</string>
+    <string name="ime_subtype_en_uk">English (UK)</string>
+    <string name="quick_tile_label">FreeFlow Dictation</string>
+</resources>
