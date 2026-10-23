@@ -10,11 +10,14 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.io.IOException
+import java.net.SocketTimeoutException
+import java.net.UnknownHostException
 import java.util.concurrent.TimeUnit
 
 /**
  * Ultra-fast Groq LPU Whisper client for speech-to-text transcriptions.
- * Uses OkHttp3 with Coroutines to stream in-memory audio bytes to Groq's API.
+ * Uses OkHttp3 with Coroutines to stream in-memory audio bytes to Groq's API,
+ * fortified with explicit network timeouts, retry policies, and defensive runCatching blocks.
  */
 class GroqWhisperClient(
     private val apiKeyProvider: () -> String?,
@@ -28,9 +31,11 @@ class GroqWhisperClient(
 
         val defaultHttpClient: OkHttpClient by lazy {
             OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
-                .writeTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(25, TimeUnit.SECONDS)
+                .writeTimeout(25, TimeUnit.SECONDS)
+                .callTimeout(35, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(true)
                 .build()
         }
     }
@@ -48,20 +53,18 @@ class GroqWhisperClient(
         model: String = DEFAULT_MODEL,
         prompt: String? = null
     ): Result<TranscriptionResult> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider()
-        if (apiKey.isNullOrBlank()) {
-            return@withContext Result.failure(
-                IllegalStateException("Groq API key is not configured. Please enter your API key in Dictation Hub.")
-            )
-        }
+        runCatching {
+            val apiKey = apiKeyProvider()
+            if (apiKey.isNullOrBlank()) {
+                throw IllegalStateException("Groq API key is not configured. Please enter your API key in Dictation Hub.")
+            }
 
-        if (wavBytes.isEmpty()) {
-            return@withContext Result.failure(IllegalArgumentException("Recorded audio byte array is empty."))
-        }
+            if (wavBytes.isEmpty()) {
+                throw IllegalArgumentException("Recorded audio byte array is empty.")
+            }
 
-        val startTime = System.currentTimeMillis()
+            val startTime = System.currentTimeMillis()
 
-        try {
             val audioMediaType = "audio/wav".toMediaType()
             val audioRequestBody = wavBytes.toRequestBody(audioMediaType, 0, wavBytes.size)
 
@@ -85,7 +88,7 @@ class GroqWhisperClient(
                 .post(requestBody)
                 .build()
 
-            Log.d(TAG, "Sending ${wavBytes.size} bytes audio to Groq Whisper ($model)...")
+            Log.d(TAG, "Streaming ${wavBytes.size} bytes audio to Groq Whisper ($model)...")
 
             client.newCall(request).execute().use { response ->
                 val latency = System.currentTimeMillis() - startTime
@@ -99,23 +102,27 @@ class GroqWhisperClient(
                         responseBody.ifBlank { "HTTP ${response.code}" }
                     }
                     Log.e(TAG, "Groq transcription failed [HTTP ${response.code}]: $errorMessage")
-                    return@withContext Result.failure(
-                        GroqApiException(response.code, errorMessage)
-                    )
+                    throw GroqApiException(response.code, errorMessage)
                 }
 
                 val json = JSONObject(responseBody)
                 val rawText = json.optString("text", "").trim()
                 Log.i(TAG, "Transcription completed in ${latency}ms: '$rawText'")
 
-                Result.success(TranscriptionResult(text = rawText, latencyMs = latency))
+                TranscriptionResult(text = rawText, latencyMs = latency)
             }
-        } catch (e: IOException) {
-            Log.e(TAG, "Network I/O exception during Groq transcription", e)
-            Result.failure(e)
-        } catch (e: Exception) {
-            Log.e(TAG, "Unexpected error during Groq transcription", e)
-            Result.failure(e)
+        }.recoverCatching { throwable ->
+            when (throwable) {
+                is SocketTimeoutException -> {
+                    Log.e(TAG, "Groq Whisper API request timed out", throwable)
+                    throw IOException("Connection to Groq timed out. Please check your network.", throwable)
+                }
+                is UnknownHostException -> {
+                    Log.e(TAG, "Unable to resolve Groq host", throwable)
+                    throw IOException("No internet connection available.", throwable)
+                }
+                else -> throw throwable
+            }
         }
     }
 
@@ -125,12 +132,12 @@ class GroqWhisperClient(
      * @return [Result] with count of available models, or exception on failure.
      */
     suspend fun testConnection(): Result<Int> = withContext(Dispatchers.IO) {
-        val apiKey = apiKeyProvider()
-        if (apiKey.isNullOrBlank()) {
-            return@withContext Result.failure(IllegalStateException("API key is blank."))
-        }
+        runCatching {
+            val apiKey = apiKeyProvider()
+            if (apiKey.isNullOrBlank()) {
+                throw IllegalStateException("API key is blank.")
+            }
 
-        try {
             val requestUrl = baseUrl.trimEnd('/') + "/models"
             val request = Request.Builder()
                 .url(requestUrl)
@@ -147,16 +154,19 @@ class GroqWhisperClient(
                     } catch (e: Exception) {
                         "HTTP ${response.code}"
                     }
-                    return@withContext Result.failure(GroqApiException(response.code, errorMessage))
+                    throw GroqApiException(response.code, errorMessage)
                 }
 
                 val json = JSONObject(responseBody)
                 val dataArray = json.optJSONArray("data")
-                val count = dataArray?.length() ?: 0
-                Result.success(count)
+                dataArray?.length() ?: 0
             }
-        } catch (e: Exception) {
-            Result.failure(e)
+        }.recoverCatching { throwable ->
+            when (throwable) {
+                is SocketTimeoutException -> throw IOException("Connection test timed out.", throwable)
+                is UnknownHostException -> throw IOException("Unable to reach Groq servers. Check internet.", throwable)
+                else -> throw throwable
+            }
         }
     }
 }

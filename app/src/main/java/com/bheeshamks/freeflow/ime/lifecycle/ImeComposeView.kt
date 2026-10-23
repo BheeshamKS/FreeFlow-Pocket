@@ -1,7 +1,8 @@
 package com.bheeshamks.freeflow.ime.lifecycle
 
-import android.content.Context
-import androidx.compose.ui.platform.AbstractComposeView
+import android.view.View
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -15,8 +16,9 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 
 /**
- * Custom lifecycle host enabling full Jetpack Compose integration inside an [android.inputmethodservice.InputMethodService].
- * Provides proper [LifecycleOwner], [ViewModelStoreOwner], and [SavedStateRegistryOwner] hierarchies.
+ * Custom lifecycle host enabling crash-proof Jetpack Compose integration inside [android.inputmethodservice.InputMethodService].
+ * Provides proper [LifecycleOwner], [ViewModelStoreOwner], and [SavedStateRegistryOwner] hierarchies,
+ * anchoring both the root ComposeView and the IME window decorView to eliminate ViewTree resolution crashes.
  */
 class ImeLifecycleHost : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
@@ -54,9 +56,24 @@ class ImeLifecycleHost : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistry
         viewModelStoreInstance.clear()
     }
 
-    fun attachToView(view: AbstractComposeView) {
+    /**
+     * Anchors this lifecycle host to the ComposeView and optionally the IME Dialog window DecorView.
+     */
+    fun attachToView(view: View, decorView: View? = null) {
         view.setViewTreeLifecycleOwner(this)
         view.setViewTreeViewModelStoreOwner(this)
         view.setViewTreeSavedStateRegistryOwner(this)
+
+        decorView?.let { decor ->
+            decor.setViewTreeLifecycleOwner(this)
+            decor.setViewTreeViewModelStoreOwner(this)
+            decor.setViewTreeSavedStateRegistryOwner(this)
+        }
+
+        if (view is ComposeView) {
+            view.setViewCompositionStrategy(
+                ViewCompositionStrategy.DisposeOnLifecycleDestroyed(this)
+            )
+        }
     }
 }

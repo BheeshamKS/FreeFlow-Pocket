@@ -92,8 +92,9 @@ class FreeFlowIMEService : InputMethodService() {
         lifecycleHost.onStart()
         lifecycleHost.onResume()
 
+        val decor = window?.window?.decorView
         return ComposeView(this).apply {
-            lifecycleHost.attachToView(this)
+            lifecycleHost.attachToView(this, decor)
 
             setContent {
                 val currentSettings by settingsStateFlow.collectAsState()
@@ -156,6 +157,20 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        lifecycleHost.onPause()
+        if (isVoiceRecording) {
+            audioCaptureManager.cancelRecording()
+            isVoiceRecording = false
+        }
+    }
+
+    override fun onWindowShown() {
+        super.onWindowShown()
+        lifecycleHost.onResume()
+    }
+
+    override fun onWindowHidden() {
+        super.onWindowHidden()
         lifecycleHost.onPause()
         if (isVoiceRecording) {
             audioCaptureManager.cancelRecording()
