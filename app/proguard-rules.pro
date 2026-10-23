@@ -25,6 +25,15 @@
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 
+# Google Tink & AndroidX Security Crypto
+-dontwarn com.google.errorprone.annotations.**
+-dontwarn com.google.crypto.tink.**
+-dontwarn javax.annotation.**
+-dontwarn org.checkerframework.**
+-dontwarn java.lang.ClassValue
+-keep class com.google.crypto.tink.** { *; }
+-keep class androidx.security.crypto.** { *; }
+
 # Compose rules
 -keep class androidx.compose.material3.** { *; }
 -keep class androidx.compose.ui.** { *; }
