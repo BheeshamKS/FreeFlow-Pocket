@@ -1,0 +1,242 @@
+package com.bheeshamks.freeflow.service
+
+import android.accessibilityservice.AccessibilityService
+import android.content.Context
+import android.os.Build
+import android.os.VibrationEffect
+import android.os.Vibrator
+import android.util.Log
+import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityNodeInfo
+import com.bheeshamks.freeflow.core.audio.AudioCaptureManager
+import com.bheeshamks.freeflow.core.data.db.DictationEntity
+import com.bheeshamks.freeflow.core.data.db.HistoryDatabase
+import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
+import com.bheeshamks.freeflow.core.network.GroqWhisperClient
+import com.bheeshamks.freeflow.core.security.ApiKeyStore
+import com.bheeshamks.freeflow.service.overlay.FloatingOverlayManager
+import com.bheeshamks.freeflow.service.overlay.OverlayHudState
+import com.bheeshamks.freeflow.service.text.TextInjector
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
+
+/**
+ * Primary Wispr Flow-style Accessibility Service.
+ * Detects focused editable text fields, mounts a floating draggable waveform capsule,
+ * suppresses automatically on password/banking apps, and performs smart text injection.
+ */
+class FreeFlowAccessibilityService : AccessibilityService() {
+
+    companion object {
+        private const val TAG = "FreeFlowAccessibility"
+    }
+
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    private var recordingScopeJob: Job? = null
+
+    private lateinit var apiKeyStore: ApiKeyStore
+    private lateinit var preferences: ThemeAndGoodiesPreferences
+    private lateinit var audioCaptureManager: AudioCaptureManager
+    private lateinit var groqClient: GroqWhisperClient
+    private lateinit var historyDb: HistoryDatabase
+    private lateinit var vibrator: Vibrator
+
+    private var overlayManager: FloatingOverlayManager? = null
+    private var currentFocusedNode: AccessibilityNodeInfo? = null
+    private var currentPackageName: String? = null
+    private var excludedPackages = setOf<String>()
+
+    override fun onCreate() {
+        super.onCreate()
+        Log.i(TAG, "Initializing FreeFlowAccessibilityService...")
+
+        apiKeyStore = ApiKeyStore(this)
+        preferences = ThemeAndGoodiesPreferences(this)
+        audioCaptureManager = AudioCaptureManager()
+        groqClient = GroqWhisperClient(apiKeyProvider = { apiKeyStore.getApiKey() })
+        historyDb = HistoryDatabase.getInstance(this)
+        vibrator = getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
+
+        overlayManager = FloatingOverlayManager(
+            service = this,
+            onStartRecording = { startVoiceRecording() },
+            onStopRecording = { stopVoiceRecordingAndInject() },
+            onDismissOverlay = { overlayManager?.hide() },
+            amplitudeFlow = audioCaptureManager.amplitude
+        )
+
+        // Observe preferences
+        serviceScope.launch {
+            preferences.settingsFlow.collectLatest { settings ->
+                excludedPackages = settings.excludedPackages
+                overlayManager?.setDictationMode(settings.dictationMode)
+            }
+        }
+    }
+
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event == null) return
+
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED -> {
+                val source = event.source ?: return
+                currentPackageName = event.packageName?.toString()
+                handleNodeFocused(source)
+            }
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                val packageName = event.packageName?.toString()
+                currentPackageName = packageName
+
+                // Check if the current window/app is in excluded packages
+                if (packageName != null && excludedPackages.contains(packageName)) {
+                    Log.d(TAG, "Excluded package active: $packageName. Suppressing overlay.")
+                    overlayManager?.hide()
+                    return
+                }
+
+                // If window changed to a non-editable surface, hide the overlay
+                val rootNode = rootInActiveWindow
+                if (rootNode != null) {
+                    val focused = rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                    if (focused != null && isNodeEditable(focused)) {
+                        handleNodeFocused(focused)
+                    } else {
+                        overlayManager?.hide()
+                    }
+                }
+            }
+        }
+    }
+
+    private fun handleNodeFocused(node: AccessibilityNodeInfo) {
+        currentFocusedNode = node
+
+        // 1. Automatic Password and Banking App Bypass
+        if (node.isPassword) {
+            Log.d(TAG, "Password field detected. Suppressing floating HUD.")
+            overlayManager?.hide()
+            return
+        }
+
+        // Check if package is in user-excluded apps
+        val pkg = currentPackageName ?: node.packageName?.toString()
+        if (pkg != null && excludedPackages.contains(pkg)) {
+            Log.d(TAG, "Excluded app focused ($pkg). Suppressing floating HUD.")
+            overlayManager?.hide()
+            return
+        }
+
+        // 2. Check if the focused view is an editable text field
+        if (isNodeEditable(node)) {
+            Log.d(TAG, "Editable text view focused in $pkg. Showing floating HUD.")
+            overlayManager?.show()
+        } else {
+            overlayManager?.hide()
+        }
+    }
+
+    private fun isNodeEditable(node: AccessibilityNodeInfo): Boolean {
+        if (node.isEditable) return true
+        val className = node.className?.toString() ?: ""
+        return className.contains("EditText", ignoreCase = true) ||
+                className.contains("AutoCompleteTextView", ignoreCase = true) ||
+                className.contains("SearchAutoComplete", ignoreCase = true)
+    }
+
+    private fun startVoiceRecording() {
+        if (!apiKeyStore.hasApiKey()) {
+            overlayManager?.setHudState(OverlayHudState.ERROR)
+            serviceScope.launch {
+                delay(2000)
+                overlayManager?.setHudState(OverlayHudState.IDLE)
+            }
+            return
+        }
+
+        val started = audioCaptureManager.startRecording()
+        if (started) {
+            overlayManager?.setHudState(OverlayHudState.RECORDING)
+        } else {
+            overlayManager?.setHudState(OverlayHudState.ERROR)
+        }
+    }
+
+    private fun stopVoiceRecordingAndInject() {
+        overlayManager?.setHudState(OverlayHudState.TRANSCRIBING)
+
+        recordingScopeJob?.cancel()
+        recordingScopeJob = serviceScope.launch(Dispatchers.IO) {
+            val wavBytes = audioCaptureManager.stopRecording()
+            if (wavBytes == null || wavBytes.isEmpty()) {
+                launch(Dispatchers.Main) {
+                    overlayManager?.setHudState(OverlayHudState.IDLE)
+                }
+                return@launch
+            }
+
+            val result = groqClient.transcribe(wavBytes)
+            launch(Dispatchers.Main) {
+                result.onSuccess { transcription ->
+                    triggerHaptic(VibrationEffect.EFFECT_CLICK)
+                    overlayManager?.setHudState(OverlayHudState.SUCCESS)
+
+                    // Inject text into the active node
+                    val injected = TextInjector.injectText(
+                        targetNode = currentFocusedNode,
+                        textToInject = transcription.text,
+                        context = this@FreeFlowAccessibilityService
+                    )
+
+                    // Store in local history Room DB
+                    launch(Dispatchers.IO) {
+                        historyDb.dictationDao().insertDictation(
+                            DictationEntity(
+                                text = transcription.text,
+                                latencyMs = transcription.latencyMs,
+                                targetPackage = currentPackageName
+                            )
+                        )
+                    }
+
+                    delay(1200)
+                    overlayManager?.setHudState(OverlayHudState.IDLE)
+                }.onFailure { err ->
+                    Log.e(TAG, "Transcription failed in AccessibilityService", err)
+                    overlayManager?.setHudState(OverlayHudState.ERROR)
+                    delay(2000)
+                    overlayManager?.setHudState(OverlayHudState.IDLE)
+                }
+            }
+        }
+    }
+
+    private fun triggerHaptic(effect: Int) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            vibrator.vibrate(VibrationEffect.createPredefined(effect))
+        } else {
+            @Suppress("DEPRECATION")
+            vibrator.vibrate(30)
+        }
+    }
+
+    override fun onInterrupt() {
+        Log.w(TAG, "FreeFlowAccessibilityService interrupted.")
+        audioCaptureManager.cancelRecording()
+        overlayManager?.hide()
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        Log.i(TAG, "FreeFlowAccessibilityService destroyed.")
+        audioCaptureManager.cancelRecording()
+        overlayManager?.destroy()
+        overlayManager = null
+        serviceScope.cancel()
+    }
+}
