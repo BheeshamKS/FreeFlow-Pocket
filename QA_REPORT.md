@@ -22,6 +22,7 @@ This document provides the full verification and hardening audit for FreeFlow Po
 | **Phase 2** | Keys Cafe Animation Polish | 🟢 Complete | Exact `rootTopLeft + offset` coordinate alignment. Custom `KeysCafeBloomEasing` (`CubicBezierEasing(0.08f, 0.82f, 0.17f, 1.0f)`). Multi-layer concentric shockwave render loop via `Modifier.drawBehind`. |
 | **Phase 3** | Edge Case Fortification | 🟢 Complete | 8MB circuit breaker in `AudioCaptureManager` preventing buffer OOM. `TileService` keyguard awareness with `unlockAndRun`. Infallible `ClipboardManager` text retention in `TextInjector`. |
 | **Phase 4** | Test Generation & Formatting | 🟢 Complete | Unit tests for buffer calculations (`AudioCaptureBufferTest`), Groq timeout/rate limit/error tests (`GroqWhisperClientTest`), and Compose UI instrumented tests (`KeyboardSmartbarUiTest`). |
+| **Phase 5** | UX Overhaul & Critical Bug Fixes | 🟢 Complete | Step-by-step 4-stage Onboarding flow (`OnboardingScreen`), 3-tab navigation (`Home`, `History`, `Settings`), Wispr Flow 3-bubble floating overlay with magnetic edge-snapping and tap-to-toggle, and keyboard fullscreen black box elimination (`wrapContentHeight` + `matchParentSize` + `onEvaluateFullscreenMode = false`). |
 
 ---
 

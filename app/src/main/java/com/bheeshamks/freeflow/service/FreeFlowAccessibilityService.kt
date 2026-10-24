@@ -67,6 +67,7 @@ class FreeFlowAccessibilityService : AccessibilityService() {
             service = this,
             onStartRecording = { startVoiceRecording() },
             onStopRecording = { stopVoiceRecordingAndInject() },
+            onCancelRecording = { cancelVoiceRecording() },
             onDismissOverlay = { overlayManager?.hide() },
             amplitudeFlow = audioCaptureManager.amplitude
         )
@@ -75,7 +76,6 @@ class FreeFlowAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             preferences.settingsFlow.collectLatest { settings ->
                 excludedPackages = settings.excludedPackages
-                overlayManager?.setDictationMode(settings.dictationMode)
             }
         }
     }
@@ -151,9 +151,19 @@ class FreeFlowAccessibilityService : AccessibilityService() {
 
     private fun startVoiceRecording() {
         if (!apiKeyStore.hasApiKey()) {
+            overlayManager?.setErrorMessage("No API Key")
             overlayManager?.setHudState(OverlayHudState.ERROR)
+            android.widget.Toast.makeText(
+                this,
+                "Please configure your Groq API key in FreeFlow",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
             serviceScope.launch {
-                delay(2000)
+                delay(3000)
                 overlayManager?.setHudState(OverlayHudState.IDLE)
             }
             return
@@ -161,10 +171,32 @@ class FreeFlowAccessibilityService : AccessibilityService() {
 
         val started = audioCaptureManager.startRecording()
         if (started) {
+            triggerHaptic(VibrationEffect.EFFECT_CLICK)
             overlayManager?.setHudState(OverlayHudState.RECORDING)
         } else {
+            overlayManager?.setErrorMessage("Mic Needed")
             overlayManager?.setHudState(OverlayHudState.ERROR)
+            android.widget.Toast.makeText(
+                this,
+                "Microphone permission required for FreeFlow",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
+            serviceScope.launch {
+                delay(3000)
+                overlayManager?.setHudState(OverlayHudState.IDLE)
+            }
         }
+    }
+
+    private fun cancelVoiceRecording() {
+        audioCaptureManager.cancelRecording()
+        recordingScopeJob?.cancel()
+        triggerHaptic(VibrationEffect.EFFECT_TICK)
+        overlayManager?.setHudState(OverlayHudState.IDLE)
     }
 
     private fun stopVoiceRecordingAndInject() {
@@ -183,11 +215,11 @@ class FreeFlowAccessibilityService : AccessibilityService() {
             val result = groqClient.transcribe(wavBytes)
             launch(Dispatchers.Main) {
                 result.onSuccess { transcription ->
-                    triggerHaptic(VibrationEffect.EFFECT_CLICK)
+                    triggerHaptic(VibrationEffect.EFFECT_HEAVY_CLICK)
                     overlayManager?.setHudState(OverlayHudState.SUCCESS)
 
                     // Inject text into the active node
-                    val injected = TextInjector.injectText(
+                    TextInjector.injectText(
                         targetNode = currentFocusedNode,
                         textToInject = transcription.text,
                         context = this@FreeFlowAccessibilityService
@@ -208,8 +240,9 @@ class FreeFlowAccessibilityService : AccessibilityService() {
                     overlayManager?.setHudState(OverlayHudState.IDLE)
                 }.onFailure { err ->
                     Log.e(TAG, "Transcription failed in AccessibilityService", err)
+                    overlayManager?.setErrorMessage(err.message ?: "Failed")
                     overlayManager?.setHudState(OverlayHudState.ERROR)
-                    delay(2000)
+                    delay(2500)
                     overlayManager?.setHudState(OverlayHudState.IDLE)
                 }
             }

@@ -88,12 +88,29 @@ class FreeFlowIMEService : InputMethodService() {
         }
     }
 
+    override fun onEvaluateFullscreenMode(): Boolean = false
+
+    override fun updateFullscreenMode() {
+        super.updateFullscreenMode()
+        window?.window?.let { win ->
+            win.setLayout(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
+            win.setGravity(android.view.Gravity.BOTTOM)
+        }
+    }
+
     override fun onCreateInputView(): View {
         lifecycleHost.onStart()
         lifecycleHost.onResume()
 
         val decor = window?.window?.decorView
         return ComposeView(this).apply {
+            layoutParams = android.view.ViewGroup.LayoutParams(
+                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
+                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
+            )
             lifecycleHost.attachToView(this, decor)
 
             setContent {
@@ -137,6 +154,12 @@ class FreeFlowIMEService : InputMethodService() {
                             flags = Intent.FLAG_ACTIVITY_NEW_TASK
                         }
                         startActivity(intent)
+                    },
+                    onClipboardClick = {
+                        handleClipboardPaste()
+                    },
+                    onTranslateClick = {
+                        handleCaseToggle()
                     },
                     activeLayer = activeLayer,
                     shiftState = shiftState,
@@ -234,8 +257,41 @@ class FreeFlowIMEService : InputMethodService() {
         }
     }
 
+    private fun handleClipboardPaste() {
+        val clipboard = getSystemService(CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+        val clip = clipboard?.primaryClip
+        if (clip != null && clip.itemCount > 0) {
+            val text = clip.getItemAt(0)?.coerceToText(this)?.toString()
+            if (!text.isNullOrEmpty()) {
+                currentInputConnection?.commitText(text, 1)
+                triggerHaptic(VibrationEffect.EFFECT_CLICK)
+            }
+        }
+    }
+
+    private fun handleCaseToggle() {
+        val ic = currentInputConnection ?: return
+        val selectedText = ic.getSelectedText(0)?.toString()
+        if (!selectedText.isNullOrEmpty()) {
+            val toggled = if (selectedText == selectedText.uppercase()) {
+                selectedText.lowercase()
+            } else {
+                selectedText.uppercase()
+            }
+            ic.commitText(toggled, 1)
+            triggerHaptic(VibrationEffect.EFFECT_TICK)
+        } else {
+            shiftState = KeyboardLayout.getNextShiftState(shiftState, false)
+        }
+    }
+
     private fun startKeyboardVoiceDictation() {
         if (!apiKeyStore.hasApiKey()) {
+            android.widget.Toast.makeText(
+                this,
+                "Please configure your Groq API key in FreeFlow",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
             val intent = Intent(this, MainActivity::class.java).apply {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
@@ -248,6 +304,16 @@ class FreeFlowIMEService : InputMethodService() {
             isVoiceRecording = true
             isVoiceTranscribing = false
             triggerHaptic(VibrationEffect.EFFECT_CLICK)
+        } else {
+            android.widget.Toast.makeText(
+                this,
+                "Microphone permission required for FreeFlow dictation",
+                android.widget.Toast.LENGTH_LONG
+            ).show()
+            val intent = Intent(this, MainActivity::class.java).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            startActivity(intent)
         }
     }
 

@@ -2,11 +2,10 @@ package com.bheeshamks.freeflow.service.overlay
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.content.Intent
 import android.graphics.PixelFormat
 import android.util.Log
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -22,17 +21,19 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import com.bheeshamks.freeflow.core.data.model.DictationMode
+import com.bheeshamks.freeflow.ui.MainActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 
 /**
  * Manages the floating WindowManager overlay capsule backed by a Jetpack ComposeView.
+ * Fortified with magnetic edge snapping, middle-right default placement, and smooth drag mechanics.
  */
 class FloatingOverlayManager(
     private val service: AccessibilityService,
     private val onStartRecording: () -> Unit,
     private val onStopRecording: () -> Unit,
+    private val onCancelRecording: () -> Unit,
     private val onDismissOverlay: () -> Unit,
     private val amplitudeFlow: StateFlow<Float>
 ) : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
@@ -57,19 +58,23 @@ class FloatingOverlayManager(
     private val _hudState = MutableStateFlow(OverlayHudState.IDLE)
     val hudState: StateFlow<OverlayHudState> = _hudState
 
-    private val _dictationMode = MutableStateFlow(DictationMode.HOLD_TO_TALK)
+    private val _isDockedOnRight = MutableStateFlow(true)
+    val isDockedOnRight: StateFlow<Boolean> = _isDockedOnRight
+
+    private val _errorMessage = MutableStateFlow<String?>(null)
+    val errorMessage: StateFlow<String?> = _errorMessage
 
     init {
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
     }
 
-    fun setDictationMode(mode: DictationMode) {
-        _dictationMode.value = mode
-    }
-
     fun setHudState(state: OverlayHudState) {
         _hudState.value = state
+    }
+
+    fun setErrorMessage(message: String?) {
+        _errorMessage.value = message
     }
 
     fun show() {
@@ -77,6 +82,11 @@ class FloatingOverlayManager(
 
         try {
             lifecycleRegistry.currentState = Lifecycle.State.STARTED
+
+            val displayMetrics = service.resources.displayMetrics
+            val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
+            val edgeMarginPx = (16 * displayMetrics.density).toInt()
 
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -86,8 +96,9 @@ class FloatingOverlayManager(
                         WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
                 PixelFormat.TRANSLUCENT
             ).apply {
-                gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-                y = 200 // Default margin above IME or navigation bar
+                gravity = Gravity.TOP or Gravity.START
+                x = screenWidth - edgeMarginPx - (56 * displayMetrics.density).toInt()
+                y = (screenHeight * 0.45f).toInt()
             }
             windowLayoutParams = params
 
@@ -98,63 +109,68 @@ class FloatingOverlayManager(
 
                 setContent {
                     val state by _hudState.collectAsState()
-                    val mode by _dictationMode.collectAsState()
+                    val dockedOnRight by _isDockedOnRight.collectAsState()
+                    val err by _errorMessage.collectAsState()
 
                     FloatingWaveformHUD(
                         hudState = state,
+                        isDockedOnRight = dockedOnRight,
+                        errorMessage = err,
                         amplitudeFlow = amplitudeFlow,
-                        dictationMode = mode,
                         onStartRecording = onStartRecording,
                         onStopRecording = onStopRecording,
-                        onCancel = {
-                            _hudState.value = OverlayHudState.IDLE
-                        },
-                        onDismiss = onDismissOverlay
-                    )
-                }
-
-                // Drag handling
-                setOnTouchListener(object : View.OnTouchListener {
-                    private var initialX = 0
-                    private var initialY = 0
-                    private var initialTouchX = 0f
-                    private var initialTouchY = 0f
-                    private var isDragging = false
-
-                    override fun onTouch(v: View, event: MotionEvent): Boolean {
-                        when (event.action) {
-                            MotionEvent.ACTION_DOWN -> {
-                                initialX = params.x
-                                initialY = params.y
-                                initialTouchX = event.rawX
-                                initialTouchY = event.rawY
-                                isDragging = false
-                                return false
+                        onCancel = onCancelRecording,
+                        onErrorClick = {
+                            val intent = Intent(service, MainActivity::class.java).apply {
+                                flags = Intent.FLAG_ACTIVITY_NEW_TASK
                             }
-                            MotionEvent.ACTION_MOVE -> {
-                                val dx = (event.rawX - initialTouchX).toInt()
-                                val dy = (initialTouchY - event.rawY).toInt()
-                                if (Math.abs(dx) > 10 || Math.abs(dy) > 10) {
-                                    isDragging = true
-                                    params.x = initialX + dx
-                                    params.y = initialY + dy
-                                    if (isViewAttached) {
-                                        windowManager.updateViewLayout(v, params)
-                                    }
+                            service.startActivity(intent)
+                        },
+                        onDragDelta = { dx, dy ->
+                            windowLayoutParams?.let { p ->
+                                p.x += dx.toInt()
+                                p.y += dy.toInt()
+                                if (isViewAttached && composeView != null) {
+                                    windowManager.updateViewLayout(composeView, p)
                                 }
-                                return isDragging
+                            }
+                        },
+                        onDragEnd = {
+                            windowLayoutParams?.let { p ->
+                                val metrics = service.resources.displayMetrics
+                                val width = metrics.widthPixels
+                                val height = metrics.heightPixels
+                                val viewWidth = composeView?.width ?: (56 * metrics.density).toInt()
+                                val viewHeight = composeView?.height ?: (56 * metrics.density).toInt()
+
+                                val goesToRight = (p.x + viewWidth / 2) > (width / 2)
+                                _isDockedOnRight.value = goesToRight
+
+                                p.x = if (goesToRight) {
+                                    width - viewWidth - (12 * metrics.density).toInt()
+                                } else {
+                                    (12 * metrics.density).toInt()
+                                }
+
+                                // Clamp Y within vertical screen limits
+                                val topLimit = (80 * metrics.density).toInt()
+                                val bottomLimit = height - viewHeight - (100 * metrics.density).toInt()
+                                p.y = p.y.coerceIn(topLimit, bottomLimit)
+
+                                if (isViewAttached && composeView != null) {
+                                    windowManager.updateViewLayout(composeView, p)
+                                }
                             }
                         }
-                        return false
-                    }
-                })
+                    )
+                }
             }
 
             windowManager.addView(view, params)
             composeView = view
             isViewAttached = true
             lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-            Log.i(TAG, "Floating HUD overlay mounted successfully.")
+            Log.i(TAG, "Floating HUD overlay mounted successfully at middle-right.")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to mount floating HUD overlay", e)
         }

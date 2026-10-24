@@ -56,6 +56,8 @@ fun KeyboardScreen(
     onStopMicClick: () -> Unit,
     onSuggestionClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
+    onClipboardClick: () -> Unit = {},
+    onTranslateClick: () -> Unit = {},
     activeLayer: KeyboardLayer,
     shiftState: ShiftState,
     smartbarState: SmartbarState,
@@ -68,17 +70,22 @@ fun KeyboardScreen(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xFF000000))
+            .wrapContentHeight()
+            .background(Color(0xFF121214))
             .navigationBarsPadding()
     ) {
-        // Background Bloom Canvas
+        // Background Bloom Canvas matched strictly to keyboard bounds
         if (settings.isKeysCafeEnabled) {
-            KeysCafeBloomCanvas(controller = keysCafeController)
+            KeysCafeBloomCanvas(
+                controller = keysCafeController,
+                modifier = Modifier.matchParentSize()
+            )
         }
 
         Column(
             modifier = Modifier
                 .fillMaxWidth()
+                .wrapContentHeight()
                 .padding(bottom = 4.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -89,8 +96,8 @@ fun KeyboardScreen(
                 onSuggestionClick = onSuggestionClick,
                 onCollapseClick = { /* toggle back to toolbar */ },
                 onEmojiClick = { onKeyPress(KeyModel("😊", keyType = KeyType.CHARACTER)) },
-                onTranslateClick = { },
-                onClipboardClick = { },
+                onTranslateClick = onTranslateClick,
+                onClipboardClick = onClipboardClick,
                 onSettingsClick = onSettingsClick,
                 onMicClick = onMicClick,
                 isMicActive = isVoiceRecording || isVoiceTranscribing

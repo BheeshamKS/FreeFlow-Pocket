@@ -55,7 +55,10 @@ data class KeyboardSettings(
     val hapticStrength: HapticStrength = HapticStrength.CLICK,
     val keyHeightDp: Float = 48f,
     val cornerRadiusDp: Float = 8f,
-    val dictationMode: DictationMode = DictationMode.HOLD_TO_TALK,
+    val dictationMode: DictationMode = DictationMode.TAP_TO_TOGGLE,
     val excludedPackages: Set<String> = emptySet(),
-    val isKeysCafeEnabled: Boolean = true
+    val isKeysCafeEnabled: Boolean = true,
+    val isOnboardingCompleted: Boolean = false,
+    val isFloatingBubbleEnabled: Boolean = true,
+    val groqModel: String = "whisper-large-v3"
 )

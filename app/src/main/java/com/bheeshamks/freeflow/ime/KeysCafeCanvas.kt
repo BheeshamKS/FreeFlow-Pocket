@@ -100,7 +100,6 @@ fun KeysCafeBloomCanvas(
 
     androidx.compose.foundation.layout.Box(
         modifier = modifier
-            .fillMaxSize()
             .drawBehind {
                 val size = particles.size
                 for (i in 0 until size) {

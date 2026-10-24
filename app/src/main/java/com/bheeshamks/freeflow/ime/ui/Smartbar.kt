@@ -62,9 +62,9 @@ fun Smartbar(
     Row(
         modifier = modifier
             .fillMaxWidth()
-            .height(46.dp)
-            .background(Color(0xFF000000))
-            .padding(horizontal = 10.dp),
+            .height(50.dp)
+            .background(Color(0xFF16161A))
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedContent(
@@ -80,10 +80,11 @@ fun Smartbar(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    // Emoji with orange notification dot
+                    // Emoji with indicator dot
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
                             .clickable { onEmojiClick() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -93,21 +94,21 @@ fun Smartbar(
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )
-                        // Orange indicator dot
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(top = 4.dp, end = 4.dp)
+                                .padding(top = 6.dp, end = 6.dp)
                                 .size(6.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFFFF6D00))
                         )
                     }
 
-                    // Translate
+                    // Translate / Quick Case
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
                             .clickable { onTranslateClick() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -119,10 +120,11 @@ fun Smartbar(
                         )
                     }
 
-                    // Clipboard
+                    // Clipboard Paste
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
                             .clickable { onClipboardClick() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -137,7 +139,8 @@ fun Smartbar(
                     // Settings
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
                             .clickable { onSettingsClick() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -149,11 +152,12 @@ fun Smartbar(
                         )
                     }
 
-                    // Overflow
+                    // Overflow / Extra Options
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clickable { },
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable { onTranslateClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -173,7 +177,8 @@ fun Smartbar(
                     // Collapse '<' button
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
+                            .size(44.dp)
+                            .clip(CircleShape)
                             .clickable { onCollapseClick() },
                         contentAlignment = Alignment.Center
                     ) {
@@ -212,8 +217,9 @@ fun Smartbar(
                     // Overflow with green dot
                     Box(
                         modifier = Modifier
-                            .size(36.dp)
-                            .clickable { },
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .clickable { onCollapseClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -225,7 +231,7 @@ fun Smartbar(
                         Box(
                             modifier = Modifier
                                 .align(Alignment.TopEnd)
-                                .padding(top = 4.dp, end = 4.dp)
+                                .padding(top = 6.dp, end = 6.dp)
                                 .size(6.dp)
                                 .clip(CircleShape)
                                 .background(Color(0xFF00E676))
@@ -235,14 +241,14 @@ fun Smartbar(
             }
         }
 
-        Spacer(modifier = Modifier.width(8.dp))
+        Spacer(modifier = Modifier.width(6.dp))
 
         // Pinned FreeFlow Mic Button
         Box(
             modifier = Modifier
-                .size(36.dp)
+                .size(44.dp)
                 .clip(CircleShape)
-                .background(if (isMicActive) Color(0xFF5AB4FF) else Color(0xFF18181C))
+                .background(if (isMicActive) Color(0xFF5AB4FF) else Color(0xFF22222A))
                 .clickable { onMicClick() },
             contentAlignment = Alignment.Center
         ) {
@@ -250,7 +256,7 @@ fun Smartbar(
                 imageVector = Icons.Default.Mic,
                 contentDescription = "FreeFlow Voice Dictation",
                 tint = if (isMicActive) Color.Black else Color(0xFF5AB4FF),
-                modifier = Modifier.size(20.dp)
+                modifier = Modifier.size(22.dp)
             )
         }
     }

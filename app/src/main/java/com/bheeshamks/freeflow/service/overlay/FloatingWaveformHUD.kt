@@ -4,18 +4,14 @@ import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -27,10 +23,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -52,7 +47,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.bheeshamks.freeflow.core.data.model.DictationMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -65,17 +59,24 @@ enum class OverlayHudState {
 }
 
 /**
- * Wispr Flow-style floating dark glass capsule HUD with dynamic audio-reactive waveform bars.
+ * Wispr Flow-style floating dark glass UI with 3-bubble expansion and magnetic edge-flipping.
+ * - Idle: Compact circular floating button (52dp).
+ * - Recording (Docked Right): [Cancel Cross (Red)] [Live Waves + Timer] [Done Tick (Green)]
+ * - Recording (Docked Left):  [Done Tick (Green)] [Live Waves + Timer] [Cancel Cross (Red)]
+ * - Single tap-to-toggle dictation.
  */
 @Composable
 fun FloatingWaveformHUD(
     hudState: OverlayHudState,
+    isDockedOnRight: Boolean,
+    errorMessage: String?,
     amplitudeFlow: StateFlow<Float>,
-    dictationMode: DictationMode,
     onStartRecording: () -> Unit,
     onStopRecording: () -> Unit,
     onCancel: () -> Unit,
-    onDismiss: () -> Unit,
+    onErrorClick: () -> Unit,
+    onDragDelta: (Float, Float) -> Unit,
+    onDragEnd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -101,186 +102,292 @@ fun FloatingWaveformHUD(
             vibrator?.vibrate(VibrationEffect.createPredefined(effect))
         } else {
             @Suppress("DEPRECATION")
-            vibrator?.vibrate(30)
+            vibrator?.vibrate(25)
         }
     }
 
     Box(
         modifier = modifier
-            .shadow(elevation = 16.dp, shape = RoundedCornerShape(28.dp), ambientColor = Color(0x66000000))
-            .clip(RoundedCornerShape(28.dp))
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xF018181C),
-                        Color(0xF00C0C0E)
-                    )
+            .pointerInput(Unit) {
+                detectDragGestures(
+                    onDrag = { change, dragAmount ->
+                        change.consume()
+                        onDragDelta(dragAmount.x, dragAmount.y)
+                    },
+                    onDragEnd = {
+                        onDragEnd()
+                    }
                 )
-            )
-            .border(
-                width = 1.dp,
-                brush = Brush.linearGradient(
-                    colors = when (hudState) {
-                        OverlayHudState.RECORDING -> listOf(Color(0xFF5AB4FF), Color(0x445AB4FF))
-                        OverlayHudState.TRANSCRIBING -> listOf(Color(0xFF00E676), Color(0x4400E676))
-                        OverlayHudState.ERROR -> listOf(Color(0xFFFF5252), Color(0x44FF5252))
-                        else -> listOf(Color(0x33FFFFFF), Color(0x11FFFFFF))
-                    }
-                ),
-                shape = RoundedCornerShape(28.dp)
-            )
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center
+            }
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-            // Left Action / Mic Button
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .clip(CircleShape)
-                    .background(
-                        when (hudState) {
-                            OverlayHudState.RECORDING -> Color(0xFF5AB4FF)
-                            OverlayHudState.TRANSCRIBING -> Color(0xFF00E676)
-                            else -> Color(0xFF282830)
-                        }
+        when (hudState) {
+            OverlayHudState.IDLE -> {
+                // Compact Floating Mic Bubble
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = Color(0x66000000))
+                        .clip(CircleShape)
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xF01C1C22), Color(0xF0101014))
+                            )
+                        )
+                        .border(
+                            width = 1.5.dp,
+                            color = Color(0x445AB4FF),
+                            shape = CircleShape
+                        )
+                        .clickable {
+                            triggerHaptic(VibrationEffect.EFFECT_CLICK)
+                            onStartRecording()
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Mic,
+                        contentDescription = "Tap to Dictate",
+                        tint = Color(0xFF5AB4FF),
+                        modifier = Modifier.size(24.dp)
                     )
-                    .then(
-                        if (dictationMode == DictationMode.HOLD_TO_TALK) {
-                            Modifier.pointerInput(hudState) {
-                                detectTapGestures(
-                                    onPress = {
-                                        if (hudState != OverlayHudState.TRANSCRIBING) {
-                                            triggerHaptic(VibrationEffect.EFFECT_CLICK)
-                                            onStartRecording()
-                                            tryAwaitRelease()
-                                            triggerHaptic(VibrationEffect.EFFECT_TICK)
-                                            onStopRecording()
-                                        }
-                                    }
-                                )
+                }
+            }
+
+            OverlayHudState.RECORDING -> {
+                // 3 Expanded Bubbles
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    if (isDockedOnRight) {
+                        // Order: [Cancel Cross] [Waveform Pill] [Done Tick]
+                        CancelBubble(
+                            onCancel = {
+                                triggerHaptic(VibrationEffect.EFFECT_TICK)
+                                onCancel()
                             }
-                        } else {
-                            Modifier.clickable {
-                                if (hudState == OverlayHudState.RECORDING) {
-                                    triggerHaptic(VibrationEffect.EFFECT_TICK)
-                                    onStopRecording()
-                                } else if (hudState == OverlayHudState.IDLE) {
-                                    triggerHaptic(VibrationEffect.EFFECT_CLICK)
-                                    onStartRecording()
-                                }
+                        )
+                        WaveformPill(
+                            amplitude = amplitude,
+                            elapsedSeconds = elapsedSeconds
+                        )
+                        DoneBubble(
+                            onDone = {
+                                triggerHaptic(VibrationEffect.EFFECT_CLICK)
+                                onStopRecording()
                             }
-                        }
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                when (hudState) {
-                    OverlayHudState.RECORDING -> {
-                        Icon(
-                            imageVector = Icons.Default.Stop,
-                            contentDescription = "Stop",
-                            tint = Color.Black,
-                            modifier = Modifier.size(18.dp)
                         )
-                    }
-                    OverlayHudState.TRANSCRIBING -> {
-                        CircularProgressIndicator(
-                            color = Color.Black,
-                            strokeWidth = 2.dp,
-                            modifier = Modifier.size(20.dp)
+                    } else {
+                        // Order: [Done Tick] [Waveform Pill] [Cancel Cross]
+                        DoneBubble(
+                            onDone = {
+                                triggerHaptic(VibrationEffect.EFFECT_CLICK)
+                                onStopRecording()
+                            }
                         )
-                    }
-                    else -> {
-                        Icon(
-                            imageVector = Icons.Default.Mic,
-                            contentDescription = "Mic",
-                            tint = Color.White,
-                            modifier = Modifier.size(20.dp)
+                        WaveformPill(
+                            amplitude = amplitude,
+                            elapsedSeconds = elapsedSeconds
+                        )
+                        CancelBubble(
+                            onCancel = {
+                                triggerHaptic(VibrationEffect.EFFECT_TICK)
+                                onCancel()
+                            }
                         )
                     }
                 }
             }
 
-            // Center Content: Waveform or Status Message
-            when (hudState) {
-                OverlayHudState.RECORDING -> {
-                    LiveWaveformBars(amplitude = amplitude)
-                    Text(
-                        text = String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60),
-                        color = Color.White,
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.SemiBold
+            OverlayHudState.TRANSCRIBING -> {
+                // Transcribing Pill
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xF014221A), Color(0xF00A140E))
+                            )
+                        )
+                        .border(1.dp, Color(0x5500E676), RoundedCornerShape(24.dp))
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    CircularProgressIndicator(
+                        color = Color(0xFF00E676),
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(20.dp)
                     )
-                }
-                OverlayHudState.TRANSCRIBING -> {
                     Text(
                         text = "Transcribing...",
                         color = Color(0xFF00E676),
                         fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                OverlayHudState.SUCCESS -> {
-                    Text(
-                        text = "Transcribed ✓",
-                        color = Color(0xFF5AB4FF),
-                        fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
-                    )
-                }
-                OverlayHudState.ERROR -> {
-                    Text(
-                        text = "Failed",
-                        color = Color(0xFFFF5252),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-                OverlayHudState.IDLE -> {
-                    Text(
-                        text = if (dictationMode == DictationMode.HOLD_TO_TALK) "Hold to talk" else "Tap to talk",
-                        color = Color(0xFFB0B0B8),
-                        fontSize = 13.sp,
-                        fontWeight = FontWeight.Medium
                     )
                 }
             }
 
-            // Close / Dismiss Icon
-            Box(
-                modifier = Modifier
-                    .size(26.dp)
-                    .clip(CircleShape)
-                    .clickable { onDismiss() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Close,
-                    contentDescription = "Close",
-                    tint = Color(0xFF888892),
-                    modifier = Modifier.size(16.dp)
-                )
+            OverlayHudState.SUCCESS -> {
+                // Success Pill
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xF0102030), Color(0xF008121A))
+                            )
+                        )
+                        .border(1.dp, Color(0x665AB4FF), RoundedCornerShape(24.dp))
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Check,
+                        contentDescription = "Success",
+                        tint = Color(0xFF5AB4FF),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Transcribed ✓",
+                        color = Color(0xFF5AB4FF),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+
+            OverlayHudState.ERROR -> {
+                // Error Pill with tap to configure
+                Row(
+                    modifier = Modifier
+                        .height(48.dp)
+                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp))
+                        .clip(RoundedCornerShape(24.dp))
+                        .background(
+                            brush = Brush.verticalGradient(
+                                colors = listOf(Color(0xF02A1416), Color(0xF0180A0C))
+                            )
+                        )
+                        .border(1.dp, Color(0x66FF5252), RoundedCornerShape(24.dp))
+                        .clickable { onErrorClick() }
+                        .padding(horizontal = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = "Error",
+                        tint = Color(0xFFFF5252),
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = errorMessage?.ifBlank { "Setup FreeFlow" } ?: "Setup FreeFlow",
+                        color = Color(0xFFFF5252),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
             }
         }
     }
 }
 
-/**
- * 6 reactive audio waveform bars scaling based on instantaneous amplitude.
- */
+@Composable
+private fun CancelBubble(onCancel: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(46.dp)
+            .shadow(elevation = 10.dp, shape = CircleShape)
+            .clip(CircleShape)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xF0281418), Color(0xF0180A0E))
+                )
+            )
+            .border(1.5.dp, Color(0x66FF5252), CircleShape)
+            .clickable { onCancel() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Close,
+            contentDescription = "Cancel Transcription",
+            tint = Color(0xFFFF5252),
+            modifier = Modifier.size(22.dp)
+        )
+    }
+}
+
+@Composable
+private fun DoneBubble(onDone: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .size(48.dp)
+            .shadow(elevation = 12.dp, shape = CircleShape)
+            .clip(CircleShape)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xFF00E676), Color(0xFF00B248))
+                )
+            )
+            .border(1.5.dp, Color(0x88FFFFFF), CircleShape)
+            .clickable { onDone() },
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(
+            imageVector = Icons.Default.Check,
+            contentDescription = "Finish and Transcribe",
+            tint = Color.Black,
+            modifier = Modifier.size(26.dp)
+        )
+    }
+}
+
+@Composable
+private fun WaveformPill(
+    amplitude: Float,
+    elapsedSeconds: Int
+) {
+    Row(
+        modifier = Modifier
+            .height(48.dp)
+            .shadow(elevation = 10.dp, shape = RoundedCornerShape(24.dp))
+            .clip(RoundedCornerShape(24.dp))
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(Color(0xF0181820), Color(0xF00E0E12))
+                )
+            )
+            .border(1.dp, Color(0x445AB4FF), RoundedCornerShape(24.dp))
+            .padding(horizontal = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        LiveWaveformBars(amplitude = amplitude)
+        Text(
+            text = String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60),
+            color = Color.White,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.Bold
+        )
+    }
+}
+
 @Composable
 private fun LiveWaveformBars(amplitude: Float) {
-    val baseHeights = listOf(8.dp, 14.dp, 22.dp, 18.dp, 12.dp, 8.dp)
+    val baseHeights = listOf(8.dp, 16.dp, 26.dp, 20.dp, 14.dp, 8.dp)
     Row(
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
+        horizontalArrangement = Arrangement.spacedBy(3.5.dp),
         verticalAlignment = Alignment.CenterVertically,
         modifier = Modifier.height(28.dp)
     ) {
         baseHeights.forEachIndexed { index, baseHeight ->
-            val scaleFactor = (amplitude * (1.2f + (index % 3) * 0.4f)).coerceIn(0.15f, 1.0f)
+            val scaleFactor = (amplitude * (1.1f + (index % 3) * 0.4f)).coerceIn(0.20f, 1.0f)
             val barHeight = (baseHeight * scaleFactor).coerceAtLeast(4.dp)
 
             Box(
