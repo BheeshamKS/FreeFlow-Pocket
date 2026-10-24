@@ -2,6 +2,7 @@ package com.bheeshamks.freeflow.service
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
+import android.content.Intent
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -17,6 +18,7 @@ import com.bheeshamks.freeflow.core.security.ApiKeyStore
 import com.bheeshamks.freeflow.service.overlay.FloatingOverlayManager
 import com.bheeshamks.freeflow.service.overlay.OverlayHudState
 import com.bheeshamks.freeflow.service.text.TextInjector
+import com.bheeshamks.freeflow.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
