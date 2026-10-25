@@ -33,6 +33,16 @@ enum class KeyboardLayer {
 }
 
 /**
+ * Top-level view states for the FreeFlow IME: Main Keyboard, Emoji Picker, Emoji Search, and Clipboard Menu.
+ */
+enum class KeyboardViewState {
+    KEYBOARD,
+    EMOJI_PICKER,
+    EMOJI_SEARCH,
+    CLIPBOARD
+}
+
+/**
  * Representation of an individual keycap.
  */
 data class KeyModel(

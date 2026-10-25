@@ -5,8 +5,12 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -141,26 +145,47 @@ fun Keycap(
             .then(borderModifier)
             .pointerInput(key, shiftState, settings) {
                 if (key.keyType == KeyType.SPACE) {
-                    // Spacebar supports horizontal swipe to move cursor
-                    detectDragGestures(
-                        onDragStart = { offset ->
-                            isPressed = true
-                            playFeedback()
-                            keysCafeController?.triggerBloom(
-                                offset = rootTopLeft + offset,
-                                colorPreset = settings.colorPreset,
-                                style = settings.animationStyle,
-                                maxRadiusPx = settings.bloomRadiusDp * 2.5f,
-                                durationMs = settings.animationSpeedMs
-                            )
-                        },
-                        onDragEnd = { isPressed = false },
-                        onDragCancel = { isPressed = false },
-                        onDrag = { change, dragAmount ->
-                            change.consume()
-                            onCursorDrag(dragAmount.x)
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+                        playFeedback()
+                        keysCafeController?.triggerBloom(
+                            offset = rootTopLeft + down.position,
+                            colorPreset = settings.colorPreset,
+                            style = settings.animationStyle,
+                            maxRadiusPx = settings.bloomRadiusDp * 2.5f,
+                            durationMs = settings.animationSpeedMs
+                        )
+
+                        var hasDragged = false
+                        var accumulatedX = 0f
+                        val touchSlop = viewConfiguration.touchSlop
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                            if (pointerChange == null || !pointerChange.pressed) {
+                                break
+                            }
+
+                            val posChange = pointerChange.positionChange()
+                            accumulatedX += posChange.x
+
+                            if (!hasDragged && kotlin.math.abs(accumulatedX) > touchSlop) {
+                                hasDragged = true
+                            }
+
+                            if (hasDragged) {
+                                pointerChange.consume()
+                                onCursorDrag(posChange.x)
+                            }
                         }
-                    )
+
+                        isPressed = false
+                        if (!hasDragged) {
+                            onKeyPress(key)
+                        }
+                    }
                 } else if (key.keyType == KeyType.BACKSPACE) {
                     // Backspace with coroutine-based acceleration
                     detectTapGestures(
@@ -254,12 +279,21 @@ fun Keycap(
                 )
             }
             KeyType.ENTER -> {
-                Icon(
-                    painter = painterResource(id = R.drawable.ic_enter),
-                    contentDescription = "Enter",
-                    tint = Color.White,
-                    modifier = Modifier.size(20.dp)
-                )
+                if (key.subtext == "search") {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = "Search",
+                        tint = Color(0xFF5AB4FF),
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Icon(
+                        painter = painterResource(id = R.drawable.ic_enter),
+                        contentDescription = "Enter",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
             KeyType.EMOJI -> {
                 Icon(

@@ -73,6 +73,7 @@ fun KeyboardScreen(
     onStopMicClick: () -> Unit,
     onSuggestionClick: (String) -> Unit,
     onSettingsClick: () -> Unit,
+    onEmojiClick: () -> Unit = {},
     onClipboardClick: () -> Unit = {},
     onTranslateClick: () -> Unit = {},
     onToggleSmartbarState: () -> Unit = {},
@@ -81,6 +82,7 @@ fun KeyboardScreen(
     shiftState: ShiftState,
     smartbarState: SmartbarState,
     suggestions: List<String>,
+    isSearchAction: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val amplitude by amplitudeFlow.collectAsState()
@@ -108,7 +110,7 @@ fun KeyboardScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .padding(bottom = 4.dp),
+                .padding(bottom = 2.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Top Smartbar
@@ -117,7 +119,7 @@ fun KeyboardScreen(
                 suggestions = suggestions,
                 onSuggestionClick = onSuggestionClick,
                 onCollapseClick = onToggleSmartbarState,
-                onEmojiClick = { onKeyPress(KeyModel("😊", keyType = KeyType.CHARACTER)) },
+                onEmojiClick = onEmojiClick,
                 onTranslateClick = onTranslateClick,
                 onClipboardClick = onClipboardClick,
                 onSettingsClick = onSettingsClick,
@@ -159,18 +161,31 @@ fun KeyboardScreen(
                     onKeyPress = onKeyPress
                 )
 
-                // Row 3: Home Alpha Row (A S D F G H J K L)
-                KeyRow(
-                    keys = KeyboardLayout.getHomeAlphaRow(),
-                    shiftState = shiftState,
-                    keysCafeController = keysCafeController,
-                    settings = settings,
-                    keyHeight = keyHeight,
-                    cornerRadius = cornerRadius,
-                    soundPlayer = soundPlayer,
-                    onKeyPreviewChange = { activeKeyPreview = it },
-                    onKeyPress = onKeyPress
-                )
+                // Row 3: Home Alpha Row (A S D F G H J K L) with 0.5f spacers on each side
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.weight(0.5f))
+                    KeyboardLayout.getHomeAlphaRow().forEach { key ->
+                        Keycap(
+                            key = key,
+                            shiftState = shiftState,
+                            keysCafeController = keysCafeController,
+                            settings = settings,
+                            keyHeight = keyHeight,
+                            cornerRadius = cornerRadius,
+                            soundPlayer = soundPlayer,
+                            onKeyPreviewChange = { activeKeyPreview = it },
+                            onKeyPress = onKeyPress,
+                            modifier = Modifier.weight(key.weight)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(0.5f))
+                }
 
                 // Row 4: Bottom Alpha Row (Shift, Z X C V B N M, Backspace)
                 Row(
@@ -206,7 +221,7 @@ fun KeyboardScreen(
                     }
                 }
 
-                // Row 5: Action Row (!#1, Emoji, Spacebar, ., Enter)
+                // Row 5: Action Row (!#1, Emoji, Spacebar, ., Enter/Search)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -214,7 +229,7 @@ fun KeyboardScreen(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    KeyboardLayout.getActionRow().forEach { key ->
+                    KeyboardLayout.getActionRow(isSearchAction = isSearchAction).forEach { key ->
                         val keyModifier = Modifier.weight(key.weight)
                         Keycap(
                             key = key,
@@ -226,10 +241,10 @@ fun KeyboardScreen(
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
                             onKeyPress = { k ->
-                                if (k.keyType == KeyType.SYMBOLS_TOGGLE) {
-                                    onSymbolsToggle()
-                                } else {
-                                    onKeyPress(k)
+                                when (k.keyType) {
+                                    KeyType.SYMBOLS_TOGGLE -> onSymbolsToggle()
+                                    KeyType.EMOJI -> onEmojiClick()
+                                    else -> onKeyPress(k)
                                 }
                             },
                             onCursorDrag = onCursorDrag,
@@ -241,14 +256,40 @@ fun KeyboardScreen(
                 // Symbols Layer
                 KeyRow(KeyboardLayout.getSymbolsRow1(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onKeyPress)
                 KeyRow(KeyboardLayout.getSymbolsRow2(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onKeyPress)
-                KeyRow(KeyboardLayout.getSymbolsRow3(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onKeyPress)
 
-                // Symbols bottom row
+                // Symbols Row 3 (with 0.5f spacers on each side)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Spacer(modifier = Modifier.weight(0.5f))
+                    KeyboardLayout.getSymbolsRow3().forEach { key ->
+                        Keycap(
+                            key = key,
+                            shiftState = shiftState,
+                            keysCafeController = keysCafeController,
+                            settings = settings,
+                            keyHeight = keyHeight,
+                            cornerRadius = cornerRadius,
+                            soundPlayer = soundPlayer,
+                            onKeyPreviewChange = { activeKeyPreview = it },
+                            onKeyPress = onKeyPress,
+                            modifier = Modifier.weight(key.weight)
+                        )
+                    }
+                    Spacer(modifier = Modifier.weight(0.5f))
+                }
+
+                // Symbols bottom row (1/2, < > { } [ ] =, Backspace)
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     KeyboardLayout.getSymbolsRow4().forEach { key ->
                         Keycap(
@@ -272,14 +313,15 @@ fun KeyboardScreen(
                     }
                 }
 
-                // Symbols action row
+                // Symbols action row (ABC, Emoji, English (UK), ., Enter/Search)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 4.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    KeyboardLayout.getActionRow().forEach { key ->
+                    KeyboardLayout.getSymbolsActionRow(isSearchAction = isSearchAction).forEach { key ->
                         Keycap(
                             key = key,
                             shiftState = shiftState,
@@ -290,10 +332,10 @@ fun KeyboardScreen(
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
                             onKeyPress = { k ->
-                                if (k.keyType == KeyType.SYMBOLS_TOGGLE) {
-                                    onSymbolsToggle()
-                                } else {
-                                    onKeyPress(k)
+                                when (k.keyType) {
+                                    KeyType.SYMBOLS_TOGGLE -> onSymbolsToggle()
+                                    KeyType.EMOJI -> onEmojiClick()
+                                    else -> onKeyPress(k)
                                 }
                             },
                             onCursorDrag = onCursorDrag,
@@ -303,17 +345,18 @@ fun KeyboardScreen(
                 }
             }
 
-            // Bottom bar with Down Chevron to hide keyboard
+            // Bottom bar with Down Chevron to hide keyboard (clean & uncluttered matching Screenshot 1)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 2.dp),
+                    .height(34.dp)
+                    .padding(horizontal = 16.dp),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Box(
                     modifier = Modifier
-                        .size(28.dp)
+                        .size(30.dp)
                         .clickable { onHideKeyboard() },
                     contentAlignment = Alignment.Center
                 ) {
