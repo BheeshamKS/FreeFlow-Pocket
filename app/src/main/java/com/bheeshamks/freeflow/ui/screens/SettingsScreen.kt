@@ -11,9 +11,12 @@ import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,7 +35,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Keyboard
@@ -44,6 +49,7 @@ import androidx.compose.material.icons.filled.Security
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Widgets
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -61,6 +67,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -71,7 +78,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -79,13 +88,20 @@ import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle
 import com.bheeshamks.freeflow.core.data.model.BloomColorPreset
 import com.bheeshamks.freeflow.core.data.model.HapticStrength
+import com.bheeshamks.freeflow.core.data.model.KeyBorderStyle
+import com.bheeshamks.freeflow.core.data.model.KeySoundTheme
 import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
+import com.bheeshamks.freeflow.core.data.model.KeyboardTheme
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
+import com.bheeshamks.freeflow.ime.audio.KeyboardSoundPlayer
 import com.bheeshamks.freeflow.service.FreeFlowAccessibilityService
 import com.bheeshamks.freeflow.ui.theme.AccentGreen
 import com.bheeshamks.freeflow.ui.theme.AccentRed
@@ -98,11 +114,18 @@ import com.bheeshamks.freeflow.ui.theme.TextSecondary
 import kotlinx.coroutines.launch
 
 /**
- * Unified Settings Screen:
- * 1. Groq API configuration & connection test
- * 2. Dictation Modes (Wispr Flow Floating Window, Quick Settings Tile, Keys Cafe Keyboard)
- * 3. Permissions Hub
- * 4. Onboarding Replay & Privacy Disclosures
+ * Dedicated sub-tabs for organizing FreeFlow Settings cleanly.
+ */
+enum class SettingsSubTab(val title: String, val icon: ImageVector) {
+    VOICE_API("API & Voice", Icons.Default.Key),
+    KEYBOARD("Keyboard", Icons.Default.Keyboard),
+    WISPR_BUBBLE("Wispr Bubble", Icons.Default.Widgets),
+    SYSTEM_PERMS("System & Privacy", Icons.Default.Security)
+}
+
+/**
+ * Fully segmented, 4-tab Settings Studio for FreeFlow.
+ * Separates Groq API, Keys Cafe Keyboard Customization, Wispr Flow Floating Bubble, and System Permissions.
  */
 @Composable
 fun SettingsScreen(
@@ -113,8 +136,11 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val scope = rememberCoroutineScope()
     val settings by preferences.settingsFlow.collectAsState(initial = KeyboardSettings())
+
+    var activeTab by remember { mutableStateOf(SettingsSubTab.VOICE_API) }
 
     var apiKeyInput by remember { mutableStateOf("") }
     var isKeyVisible by remember { mutableStateOf(false) }
@@ -122,6 +148,8 @@ fun SettingsScreen(
     var isTestingConnection by remember { mutableStateOf(false) }
 
     var isAccessibilityEnabled by remember { mutableStateOf(false) }
+    var isOverlayEnabled by remember { mutableStateOf(false) }
+    var isKeyboardEnabled by remember { mutableStateOf(false) }
 
     var hasMicPermission by remember {
         mutableStateOf(
@@ -135,17 +163,41 @@ fun SettingsScreen(
         hasMicPermission = granted
     }
 
-    fun checkAccessibility() {
-        val expectedServiceName = "${context.packageName}/${FreeFlowAccessibilityService::class.java.canonicalName}"
-        val enabledServices = Settings.Secure.getString(
+    fun checkAllPermissions() {
+        val expectedAccessibility = "${context.packageName}/${FreeFlowAccessibilityService::class.java.canonicalName}"
+        val enabledAccessibility = Settings.Secure.getString(
             context.contentResolver,
             Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
         ) ?: ""
-        isAccessibilityEnabled = enabledServices.contains(expectedServiceName, ignoreCase = true)
+        isAccessibilityEnabled = enabledAccessibility.contains(expectedAccessibility, ignoreCase = true)
+
+        isOverlayEnabled = Settings.canDrawOverlays(context)
+
+        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+        val enabledImes = imm.enabledInputMethodList.map { it.id }
+        isKeyboardEnabled = enabledImes.any { it.contains("com.bheeshamks.freeflow") }
+
+        hasMicPermission = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
+
+    // Auto-refresh permission statuses whenever user returns from Android Settings
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                checkAllPermissions()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
     }
 
     LaunchedEffect(Unit) {
-        checkAccessibility()
+        checkAllPermissions()
         val currentKey = apiKeyStore.getApiKey()
         if (!currentKey.isNullOrBlank()) {
             apiKeyInput = currentKey
@@ -156,11 +208,9 @@ fun SettingsScreen(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .verticalScroll(rememberScrollState()),
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .padding(horizontal = 20.dp, vertical = 12.dp)
     ) {
-        // Title
+        // Top Header
         Text(
             text = "Settings",
             fontSize = 28.sp,
@@ -168,441 +218,1061 @@ fun SettingsScreen(
             color = TextPrimary
         )
 
-        // ==========================================
-        // SECTION 1: GROQ LPU API CONFIGURATION
-        // ==========================================
-        SettingsSectionCard(
-            title = "Groq LPU Whisper API",
-            icon = Icons.Default.Key
+        Spacer(modifier = Modifier.height(14.dp))
+
+        // Horizontal Segmented Sub-Tab Bar
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .horizontalScroll(rememberScrollState()),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = "FreeFlow uses Groq's high-throughput LPU infrastructure to achieve ~300ms Whisper transcription.",
-                fontSize = 13.sp,
-                color = TextSecondary,
-                lineHeight = 18.sp
-            )
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            OutlinedTextField(
-                value = apiKeyInput,
-                onValueChange = {
-                    apiKeyInput = it.trim()
-                    testResult = null
-                },
-                label = { Text("Groq API Key (gsk_...)") },
-                placeholder = { Text("gsk_xxxxxxxxxxxxxxxxxxxx") },
-                singleLine = true,
-                visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
-                trailingIcon = {
-                    IconButton(onClick = { isKeyVisible = !isKeyVisible }) {
+            SettingsSubTab.values().forEach { tab ->
+                val isSelected = activeTab == tab
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(if (isSelected) PrimaryBlue else Color(0xFF1E1E26))
+                        .clickable { activeTab = tab }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
                         Icon(
-                            imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
-                            contentDescription = "Toggle visibility",
-                            tint = TextSecondary
+                            imageVector = tab.icon,
+                            contentDescription = tab.title,
+                            tint = if (isSelected) Color.White else TextSecondary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Text(
+                            text = tab.title,
+                            color = if (isSelected) Color.White else TextSecondary,
+                            fontSize = 13.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         )
                     }
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = PrimaryBlue,
-                    unfocusedBorderColor = DarkCardBorder,
-                    focusedTextColor = TextPrimary,
-                    unfocusedTextColor = TextPrimary
-                )
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Save Button
-                Button(
-                    onClick = {
-                        if (apiKeyInput.isNotBlank()) {
-                            apiKeyStore.saveApiKey(apiKeyInput)
-                            Toast.makeText(context, "API Key saved securely ✓", Toast.LENGTH_SHORT).show()
-                        } else {
-                            apiKeyStore.clearApiKey()
-                            Toast.makeText(context, "API Key cleared", Toast.LENGTH_SHORT).show()
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
-                ) {
-                    Text("Save Key", color = Color.Black, fontWeight = FontWeight.SemiBold)
                 }
-
-                // Test Button
-                OutlinedButton(
-                    onClick = {
-                        isTestingConnection = true
-                        testResult = null
-                        if (apiKeyInput.isNotBlank()) {
-                            apiKeyStore.saveApiKey(apiKeyInput)
-                        }
-                        scope.launch {
-                            val result = groqClient.testConnection()
-                            isTestingConnection = false
-                            testResult = result.fold(
-                                onSuccess = { "Connected ✓ ($it models available)" },
-                                onFailure = { it.message ?: "Connection failed" }
-                            )
-                        }
-                    },
-                    modifier = Modifier.weight(1f),
-                    enabled = apiKeyInput.isNotBlank() && !isTestingConnection
-                ) {
-                    if (isTestingConnection) {
-                        CircularProgressIndicator(modifier = Modifier.size(16.dp), color = PrimaryBlue, strokeWidth = 2.dp)
-                    } else {
-                        Text("Test Connection", color = PrimaryBlue)
-                    }
-                }
-            }
-
-            testResult?.let { res ->
-                Spacer(modifier = Modifier.height(8.dp))
-                val isSuccess = res.contains("Connected")
-                Text(
-                    text = res,
-                    color = if (isSuccess) AccentGreen else AccentRed,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            // Get Key link
-            Row(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .clickable {
-                        val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse("https://console.groq.com/keys"))
-                        context.startActivity(browserIntent)
-                    }
-                    .padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(text = "Get a free API key at console.groq.com", color = PrimaryBlue, fontSize = 12.sp)
-                Spacer(modifier = Modifier.width(4.dp))
-                Icon(imageVector = Icons.Default.OpenInNew, contentDescription = "Open", tint = PrimaryBlue, modifier = Modifier.size(14.dp))
             }
         }
 
-        // ==========================================
-        // SECTION 2: DICTATION MODES
-        // ==========================================
-        SettingsSectionCard(
-            title = "Dictation Modes",
-            icon = Icons.Default.Layers
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Content Area for Active Tab
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(18.dp)
         ) {
-            // Mode A: Floating Bubble (Wispr Flow)
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Floating Wispr Bubble", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(text = "Draggable edge-snapping mic overlay", color = TextSecondary, fontSize = 12.sp)
+            when (activeTab) {
+                SettingsSubTab.VOICE_API -> {
+                    VoiceApiTabContent(
+                        apiKeyInput = apiKeyInput,
+                        onApiKeyChange = { apiKeyInput = it; testResult = null },
+                        isKeyVisible = isKeyVisible,
+                        onToggleKeyVisibility = { isKeyVisible = !isKeyVisible },
+                        testResult = testResult,
+                        isTestingConnection = isTestingConnection,
+                        onSaveKey = {
+                            apiKeyStore.saveApiKey(apiKeyInput)
+                            Toast.makeText(context, "Groq API key saved successfully!", Toast.LENGTH_SHORT).show()
+                        },
+                        onTestConnection = {
+                            if (apiKeyInput.isBlank()) {
+                                testResult = "Error: Please enter an API key first"
+                                return@VoiceApiTabContent
+                            }
+                            isTestingConnection = true
+                            testResult = null
+                            scope.launch {
+                                val startTime = System.currentTimeMillis()
+                                val result = groqClient.testConnection(apiKeyInput)
+                                val latency = System.currentTimeMillis() - startTime
+                                isTestingConnection = false
+                                result.onSuccess { modelCount ->
+                                    testResult = "✓ Connected to Groq LPU ($modelCount models, ${latency}ms)"
+                                }.onFailure { err ->
+                                    testResult = "Connection failed: ${err.message}"
+                                }
+                            }
+                        },
+                        onOpenGroqConsole = {
+                            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://console.groq.com/keys"))
+                            context.startActivity(intent)
+                        }
+                    )
                 }
-                Switch(
-                    checked = settings.isFloatingBubbleEnabled,
-                    onCheckedChange = { enabled ->
-                        scope.launch { preferences.setFloatingBubbleEnabled(enabled) }
-                    },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = PrimaryBlue)
-                )
+
+                SettingsSubTab.KEYBOARD -> {
+                    KeyboardStudioTabContent(
+                        settings = settings,
+                        preferences = preferences,
+                        isKeyboardEnabled = isKeyboardEnabled,
+                        onEnableKeyboard = {
+                            val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
+                            context.startActivity(intent)
+                        },
+                        onSelectKeyboard = {
+                            val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as InputMethodManager
+                            imm.showInputMethodPicker()
+                        }
+                    )
+                }
+
+                SettingsSubTab.WISPR_BUBBLE -> {
+                    WisprBubbleTabContent(
+                        settings = settings,
+                        preferences = preferences,
+                        isAccessibilityEnabled = isAccessibilityEnabled,
+                        isOverlayEnabled = isOverlayEnabled,
+                        onEnableAccessibility = {
+                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            context.startActivity(intent)
+                        },
+                        onEnableOverlay = {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                            context.startActivity(intent)
+                        }
+                    )
+                }
+
+                SettingsSubTab.SYSTEM_PERMS -> {
+                    SystemPermissionsTabContent(
+                        hasMicPermission = hasMicPermission,
+                        onRequestMic = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
+                        isAccessibilityEnabled = isAccessibilityEnabled,
+                        onEnableAccessibility = {
+                            val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
+                            context.startActivity(intent)
+                        },
+                        isOverlayEnabled = isOverlayEnabled,
+                        onEnableOverlay = {
+                            val intent = Intent(
+                                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                Uri.parse("package:${context.packageName}")
+                            )
+                            context.startActivity(intent)
+                        },
+                        onReplayOnboarding = onReplayOnboarding
+                    )
+                }
             }
 
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+    }
+}
+
+// =========================================================================
+// TAB 1: GROQ WHISPER API CONTENT
+// =========================================================================
+@Composable
+private fun VoiceApiTabContent(
+    apiKeyInput: String,
+    onApiKeyChange: (String) -> Unit,
+    isKeyVisible: Boolean,
+    onToggleKeyVisibility: () -> Unit,
+    testResult: String?,
+    isTestingConnection: Boolean,
+    onSaveKey: () -> Unit,
+    onTestConnection: () -> Unit,
+    onOpenGroqConsole: () -> Unit
+) {
+    SettingsCard(
+        title = "Groq LPU Whisper Cloud",
+        icon = Icons.Default.Key
+    ) {
+        Text(
+            text = "FreeFlow transcribes audio at ~300ms using Groq's high-throughput LPU infrastructure and Whisper Large V3. 100% in-memory streaming with zero temporary sound files saved to your device.",
+            fontSize = 13.sp,
+            color = TextSecondary,
+            lineHeight = 18.sp
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        OutlinedTextField(
+            value = apiKeyInput,
+            onValueChange = onApiKeyChange,
+            label = { Text("Groq API Key (gsk_...)") },
+            placeholder = { Text("gsk_xxxxxxxxxxxxxxxxxxxx") },
+            singleLine = true,
+            visualTransformation = if (isKeyVisible) VisualTransformation.None else PasswordVisualTransformation(),
+            trailingIcon = {
+                IconButton(onClick = onToggleKeyVisibility) {
+                    Icon(
+                        imageVector = if (isKeyVisible) Icons.Default.VisibilityOff else Icons.Default.Visibility,
+                        contentDescription = "Toggle visibility",
+                        tint = TextSecondary
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = PrimaryBlue,
+                unfocusedBorderColor = DarkCardBorder,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary
+            )
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Button(
+                onClick = onSaveKey,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Save Key", color = Color.White, fontWeight = FontWeight.SemiBold)
+            }
+
+            OutlinedButton(
+                onClick = onTestConnection,
+                enabled = !isTestingConnection,
+                modifier = Modifier.weight(1f)
+            ) {
+                if (isTestingConnection) {
+                    CircularProgressIndicator(modifier = Modifier.size(16.dp), color = PrimaryBlue, strokeWidth = 2.dp)
+                } else {
+                    Text("Test Connection", color = TextPrimary)
+                }
+            }
+        }
+
+        testResult?.let { result ->
+            Spacer(modifier = Modifier.height(10.dp))
+            val isSuccess = result.startsWith("✓")
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (isSuccess) Color(0x2200E676) else Color(0x22FF5252))
+                    .padding(horizontal = 12.dp, vertical = 8.dp)
+            ) {
+                Icon(
+                    imageVector = if (isSuccess) Icons.Default.CheckCircle else Icons.Default.Error,
+                    contentDescription = null,
+                    tint = if (isSuccess) AccentGreen else AccentRed,
+                    modifier = Modifier.size(16.dp)
+                )
+                Text(
+                    text = result,
+                    fontSize = 12.sp,
+                    color = if (isSuccess) AccentGreen else AccentRed,
+                    fontWeight = FontWeight.Medium
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier
+                .clickable { onOpenGroqConsole() }
+                .padding(vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Get a free API key at console.groq.com",
+                color = PrimaryBlue,
+                fontSize = 12.sp
+            )
+            Spacer(modifier = Modifier.width(4.dp))
+            Icon(
+                imageVector = Icons.Default.OpenInNew,
+                contentDescription = "Open Groq Console",
+                tint = PrimaryBlue,
+                modifier = Modifier.size(14.dp)
+            )
+        }
+    }
+}
+
+// =========================================================================
+// TAB 2: KEYBOARD STUDIO CONTENT
+// =========================================================================
+@Composable
+private fun KeyboardStudioTabContent(
+    settings: KeyboardSettings,
+    preferences: ThemeAndGoodiesPreferences,
+    isKeyboardEnabled: Boolean,
+    onEnableKeyboard: () -> Unit,
+    onSelectKeyboard: () -> Unit
+) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val soundPlayer = remember { KeyboardSoundPlayer(context) }
+    DisposableEffect(Unit) {
+        onDispose { soundPlayer.release() }
+    }
+
+    // 1. Live Interactive Key Preview
+    SettingsCard(
+        title = "Live Keycap Preview",
+        icon = Icons.Default.Keyboard
+    ) {
+        Text(
+            text = "Real-time preview of your selected theme, border style, and bloom glow.",
+            fontSize = 12.sp,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(settings.keyboardTheme.bgHex))
+                .padding(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val borderModifier = when (settings.borderStyle) {
+                KeyBorderStyle.NO_BORDER -> Modifier
+                KeyBorderStyle.SUBTLE -> Modifier.border(0.8.dp, Color(0x33FFFFFF), RoundedCornerShape(settings.cornerRadiusDp.dp))
+                KeyBorderStyle.GLOW_ACCENT -> Modifier.border(1.2.dp, Color(settings.colorPreset.primaryColor), RoundedCornerShape(settings.cornerRadiusDp.dp))
+            }
+
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (settings.showKeyPreviewPopup) {
+                    Box(
+                        modifier = Modifier
+                            .size(46.dp, 50.dp)
+                            .shadow(6.dp, RoundedCornerShape(12.dp), spotColor = Color(settings.colorPreset.outerGlowColor))
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(Color(settings.keyboardTheme.keyHex))
+                            .border(1.2.dp, Color(settings.colorPreset.primaryColor), RoundedCornerShape(12.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text("A", color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
+
+                Box(
+                    modifier = Modifier
+                        .width(64.dp)
+                        .height(settings.keyHeightDp.dp)
+                        .clip(RoundedCornerShape(settings.cornerRadiusDp.dp))
+                        .background(Color(settings.keyboardTheme.keyHex))
+                        .then(borderModifier),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = "A",
+                        color = Color.White,
+                        fontSize = 19.sp,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+            }
+        }
+    }
+
+    // 2. Keyboard Themes
+    SettingsCard(
+        title = "Keyboard Theme (Background)",
+        icon = Icons.Default.Layers
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            KeyboardTheme.values().forEach { theme ->
+                val isSelected = settings.keyboardTheme == theme
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) Color(0x335AB4FF) else Color(0xFF1B1B22))
+                        .border(
+                            width = if (isSelected) 1.dp else 0.5.dp,
+                            color = if (isSelected) PrimaryBlue else Color(0x22FFFFFF),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .clickable { scope.launch { preferences.updateKeyboardTheme(theme) } }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(22.dp)
+                                .clip(CircleShape)
+                                .background(Color(theme.bgHex))
+                                .border(1.dp, Color.White.copy(alpha = 0.3f), CircleShape)
+                        )
+                        Text(
+                            text = theme.displayName,
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                    }
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Key Border Style
+    SettingsCard(
+        title = "Letter Keycap Border Style",
+        icon = Icons.Default.Widgets
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            KeyBorderStyle.values().forEach { borderStyle ->
+                val isSelected = settings.borderStyle == borderStyle
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) PrimaryBlue else Color(0xFF1E1E26))
+                        .clickable { scope.launch { preferences.updateBorderStyle(borderStyle) } }
+                        .padding(vertical = 10.dp, horizontal = 4.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = borderStyle.displayName,
+                        fontSize = 11.sp,
+                        color = if (isSelected) Color.White else TextSecondary,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+
+    // 4. Keys Cafe Bloom Animation
+    SettingsCard(
+        title = "Keys Cafe Radial Bloom",
+        icon = Icons.Default.GraphicEq
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("Animated Keystroke Bloom", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Radial neon ripples on keypress", color = TextSecondary, fontSize = 12.sp)
+            }
+            Switch(
+                checked = settings.isKeysCafeEnabled,
+                onCheckedChange = { scope.launch { preferences.setKeysCafeEnabled(it) } },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryBlue)
+            )
+        }
+
+        if (settings.isKeysCafeEnabled) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Text("Bloom Color Preset", fontSize = 12.sp, color = TextSecondary)
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Accessibility Status
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF1C1C22))
-                    .padding(12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Accessibility Permission", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
-                    Text(
-                        text = if (isAccessibilityEnabled) "Service Enabled ✓" else "Service Disabled (Required)",
-                        fontSize = 11.sp,
-                        color = if (isAccessibilityEnabled) AccentGreen else AccentRed
-                    )
-                }
-                Button(
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
-                        context.startActivity(intent)
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = if (isAccessibilityEnabled) Color(0xFF282832) else PrimaryBlue),
-                    modifier = Modifier.height(34.dp)
-                ) {
-                    Text(text = if (isAccessibilityEnabled) "Settings" else "Enable", fontSize = 12.sp, color = if (isAccessibilityEnabled) TextPrimary else Color.Black)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Mode B: Quick Settings Tile
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Quick Settings Tile", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(text = "One-tap dictation in notification shade", color = TextSecondary, fontSize = 12.sp)
-                }
-                Text(text = "Ready ✓", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-            }
-
-            Text(
-                text = "To add: Swipe down notification shade twice -> tap edit (pencil icon) -> drag 'FreeFlow Dictate' to your tiles.",
-                fontSize = 11.sp,
-                color = TextSecondary,
-                modifier = Modifier.padding(top = 4.dp)
-            )
-
-            Spacer(modifier = Modifier.height(16.dp))
-
-            // Mode C: Keys Cafe Custom Keyboard
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Keys Cafe Keyboard", color = TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    Text(text = "Samsung-style keyboard with radial glow", color = TextSecondary, fontSize = 12.sp)
-                }
-                Switch(
-                    checked = settings.isKeysCafeEnabled,
-                    onCheckedChange = { enabled ->
-                        scope.launch { preferences.setKeysCafeEnabled(enabled) }
-                    },
-                    colors = SwitchDefaults.colors(checkedThumbColor = Color.Black, checkedTrackColor = PrimaryBlue)
-                )
-            }
-
-            Spacer(modifier = Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
+                    .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Button(
-                    onClick = {
-                        val intent = Intent(Settings.ACTION_INPUT_METHOD_SETTINGS)
-                        context.startActivity(intent)
-                    },
-                    modifier = Modifier.weight(1f).height(38.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24242C))
-                ) {
-                    Text("Enable IME", color = Color.White, fontSize = 12.sp)
-                }
-
-                Button(
-                    onClick = {
-                        val imm = context.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
-                        imm?.showInputMethodPicker()
-                    },
-                    modifier = Modifier.weight(1f).height(38.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF24242C))
-                ) {
-                    Text("Select IME", color = Color.White, fontSize = 12.sp)
-                }
-            }
-
-            Spacer(modifier = Modifier.height(12.dp))
-
-            // Keyboard Color Presets
-            Text(text = "Keyboard Bloom Color Theme", fontSize = 12.sp, color = TextSecondary)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
                 BloomColorPreset.values().forEach { preset ->
-                    val selected = settings.colorPreset == preset
+                    val isSelected = settings.colorPreset == preset
                     Box(
                         modifier = Modifier
-                            .weight(1f)
-                            .height(32.dp)
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(Color(preset.primaryColor))
-                            .border(if (selected) 2.dp else 0.dp, Color.White, RoundedCornerShape(8.dp))
-                            .clickable {
-                                scope.launch { preferences.updateColorPreset(preset) }
-                            },
-                        contentAlignment = Alignment.Center
+                            .clip(RoundedCornerShape(20.dp))
+                            .background(if (isSelected) Color(preset.primaryColor).copy(alpha = 0.25f) else Color(0xFF1E1E26))
+                            .border(
+                                width = if (isSelected) 1.5.dp else 0.5.dp,
+                                color = if (isSelected) Color(preset.primaryColor) else Color.Transparent,
+                                shape = RoundedCornerShape(20.dp)
+                            )
+                            .clickable { scope.launch { preferences.updateColorPreset(preset) } }
+                            .padding(horizontal = 12.dp, vertical = 6.dp)
                     ) {
-                        if (selected) {
-                            Icon(imageVector = Icons.Default.Check, contentDescription = "Selected", tint = Color.Black, modifier = Modifier.size(16.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Box(modifier = Modifier.size(12.dp).clip(CircleShape).background(Color(preset.primaryColor)))
+                            Text(preset.displayName, fontSize = 12.sp, color = if (isSelected) Color.White else TextSecondary)
                         }
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(14.dp))
+            Text("Animation Style", fontSize = 12.sp, color = TextSecondary)
+            Spacer(modifier = Modifier.height(8.dp))
 
-            // Haptic Feedback
-            Text(text = "Haptic Feedback Intensity", fontSize = 12.sp, color = TextSecondary)
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                HapticStrength.values().forEach { strength ->
-                    FilterChip(
-                        selected = settings.hapticStrength == strength,
-                        onClick = {
-                            scope.launch { preferences.updateHapticStrength(strength) }
-                        },
-                        label = { Text(strength.displayName, fontSize = 10.sp) },
-                        colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor = PrimaryBlue,
-                            selectedLabelColor = Color.Black
-                        )
-                    )
-                }
-            }
-        }
-
-        // ==========================================
-        // SECTION 3: PERMISSIONS & SYSTEM STATUS
-        // ==========================================
-        SettingsSectionCard(
-            title = "Permissions Hub",
-            icon = Icons.Default.Security
-        ) {
-            // Microphone
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(imageVector = Icons.Default.Mic, contentDescription = "Mic", tint = PrimaryBlue, modifier = Modifier.size(18.dp))
-                    Text(text = "Microphone Permission", color = TextPrimary, fontSize = 13.sp)
-                }
-                if (hasMicPermission) {
-                    Text(text = "Granted ✓", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Medium)
-                } else {
-                    Button(
-                        onClick = { micLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                        colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
-                        modifier = Modifier.height(30.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                BloomAnimationStyle.values().forEach { style ->
+                    val isSelected = settings.animationStyle == style
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(if (isSelected) Color(0x335AB4FF) else Color(0xFF1B1B22))
+                            .clickable { scope.launch { preferences.updateAnimationStyle(style) } }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("Grant", fontSize = 11.sp, color = Color.White)
+                        Text(style.displayName, fontSize = 13.sp, color = TextPrimary)
+                        if (isSelected) Icon(Icons.Default.Check, null, tint = PrimaryBlue, modifier = Modifier.size(16.dp))
                     }
                 }
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Bloom Radius", fontSize = 12.sp, color = TextSecondary)
+                Text("${settings.bloomRadiusDp.toInt()}dp", fontSize = 12.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = settings.bloomRadiusDp,
+                onValueChange = { scope.launch { preferences.updateBloomRadius(it) } },
+                valueRange = 60f..180f,
+                colors = SliderDefaults.colors(thumbColor = PrimaryBlue, activeTrackColor = PrimaryBlue)
+            )
+        }
+    }
 
-            // Accessibility
+    // 5. Layout & Sizing
+    SettingsCard(
+        title = "Keycap Sizing & Ergonomics",
+        icon = Icons.Default.Settings
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Show Key Preview Above Finger", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Enlarged floating letter bubble while typing (iOS / Samsung)", color = TextSecondary, fontSize = 12.sp)
+            }
+            Switch(
+                checked = settings.showKeyPreviewPopup,
+                onCheckedChange = { scope.launch { preferences.updateShowKeyPreview(it) } },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryBlue)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f).padding(end = 12.dp)) {
+                Text("Dedicated Number Row", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Row of numbers (1-0) above QWERTY", color = TextSecondary, fontSize = 12.sp)
+            }
+            Switch(
+                checked = settings.showNumberRow,
+                onCheckedChange = { scope.launch { preferences.updateShowNumberRow(it) } },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryBlue)
+            )
+        }
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Text("Key Height", fontSize = 12.sp, color = TextSecondary)
+            Text("${settings.keyHeightDp.toInt()}dp", fontSize = 12.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
+        }
+        Slider(
+            value = settings.keyHeightDp,
+            onValueChange = { scope.launch { preferences.updateKeyHeight(it) } },
+            valueRange = 42f..56f,
+            colors = SliderDefaults.colors(thumbColor = PrimaryBlue, activeTrackColor = PrimaryBlue)
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Text("Haptic Typing Feedback", fontSize = 12.sp, color = TextSecondary)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            HapticStrength.values().forEach { strength ->
+                val isSelected = settings.hapticStrength == strength
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(if (isSelected) PrimaryBlue else Color(0xFF1E1E26))
+                        .clickable { scope.launch { preferences.updateHapticStrength(strength) } }
+                        .padding(vertical = 8.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = strength.displayName.split(" ").first(),
+                        fontSize = 11.sp,
+                        color = if (isSelected) Color.White else TextSecondary,
+                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                }
+            }
+        }
+    }
+
+    // 6. Keypress Audio & Sound Themes
+    SettingsCard(
+        title = "Keypress Audio & Sound Themes",
+        icon = Icons.Default.VolumeUp
+    ) {
+        Text(
+            text = "Crisp acoustic feedback tailored for hyper-fast typing. Tap any theme to hear an immediate live preview.",
+            fontSize = 12.sp,
+            color = TextSecondary
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            KeySoundTheme.values().forEach { soundTheme ->
+                val isSelected = settings.soundTheme == soundTheme
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(10.dp))
+                        .background(if (isSelected) Color(0x335AB4FF) else Color(0xFF1B1B22))
+                        .border(
+                            width = if (isSelected) 1.dp else 0.5.dp,
+                            color = if (isSelected) PrimaryBlue else Color(0x22FFFFFF),
+                            shape = RoundedCornerShape(10.dp)
+                        )
+                        .clickable {
+                            soundPlayer.playKeySound(soundTheme, settings.soundVolume)
+                            scope.launch { preferences.updateSoundTheme(soundTheme) }
+                        }
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Column(modifier = Modifier.weight(1f).padding(end = 8.dp)) {
+                        Text(
+                            text = soundTheme.displayName,
+                            color = TextPrimary,
+                            fontSize = 14.sp,
+                            fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
+                        )
+                        Text(
+                            text = soundTheme.description,
+                            color = TextSecondary,
+                            fontSize = 12.sp
+                        )
+                    }
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Default.Check,
+                            contentDescription = null,
+                            tint = PrimaryBlue,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (settings.soundTheme != KeySoundTheme.OFF) {
+            Spacer(modifier = Modifier.height(14.dp))
+            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Sound Volume", fontSize = 12.sp, color = TextSecondary)
+                Text("${(settings.soundVolume * 100).toInt()}%", fontSize = 12.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
+            }
+            Slider(
+                value = settings.soundVolume,
+                onValueChange = {
+                    scope.launch { preferences.updateSoundVolume(it) }
+                },
+                valueRange = 0.05f..1.0f,
+                colors = SliderDefaults.colors(thumbColor = PrimaryBlue, activeTrackColor = PrimaryBlue)
+            )
+        }
+    }
+
+    // 7. System Keyboard IME Activation
+    SettingsCard(
+        title = "System Keyboard Activation",
+        icon = Icons.Default.Keyboard
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("FreeFlow IME Status", color = TextPrimary, fontSize = 13.sp)
+            Text(
+                text = if (isKeyboardEnabled) "Enabled ✓" else "Not Enabled",
+                color = if (isKeyboardEnabled) AccentGreen else AccentRed,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button(
+                onClick = onEnableKeyboard,
+                colors = ButtonDefaults.buttonColors(containerColor = if (isKeyboardEnabled) Color(0xFF282832) else PrimaryBlue),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text(if (isKeyboardEnabled) "Manage IMEs" else "Enable Keyboard", fontSize = 12.sp, color = if (isKeyboardEnabled) TextPrimary else Color.White)
+            }
+
+            Button(
+                onClick = onSelectKeyboard,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                modifier = Modifier.weight(1f)
+            ) {
+                Text("Select Keyboard", fontSize = 12.sp, color = Color.White)
+            }
+        }
+    }
+}
+
+// =========================================================================
+// TAB 3: WISPR BUBBLE CONTENT
+// =========================================================================
+@Composable
+private fun WisprBubbleTabContent(
+    settings: KeyboardSettings,
+    preferences: ThemeAndGoodiesPreferences,
+    isAccessibilityEnabled: Boolean,
+    isOverlayEnabled: Boolean,
+    onEnableAccessibility: () -> Unit,
+    onEnableOverlay: () -> Unit
+) {
+    val scope = rememberCoroutineScope()
+
+    SettingsCard(
+        title = "Wispr Flow Floating Bubble",
+        icon = Icons.Default.Widgets
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Floating Capsule Overlay", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                Text("Discreet 52dp mic bubble docked to the screen edge", color = TextSecondary, fontSize = 12.sp)
+            }
+            Switch(
+                checked = settings.isFloatingBubbleEnabled,
+                onCheckedChange = { scope.launch { preferences.setFloatingBubbleEnabled(it) } },
+                colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryBlue)
+            )
+        }
+    }
+
+    SettingsCard(
+        title = "Magnetic Edge-Snapping Behavior",
+        icon = Icons.Default.Info
+    ) {
+        Text(
+            text = "• Middle-Right Default: Placed comfortably within the natural thumb zone.\n• Magnetic Snapping: Dragging the bubble to the center or sides automatically snaps it smoothly to the closest screen border (left or right side only).\n• Tap-to-Toggle Only: Tap once to start dictating, tap the green tick to inject transcribed text into the active app, or tap the red cross to discard.",
+            fontSize = 13.sp,
+            color = TextSecondary,
+            lineHeight = 18.sp
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+        Text("3-Bubble Dynamic Expansion Architecture:", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Visual diagram of 3-bubble expansion
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+                .background(Color(0xFF16161E))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text("When docked on Right Edge:", fontSize = 11.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
+                horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Icon(imageVector = Icons.Default.Widgets, contentDescription = "Accessibility", tint = PrimaryBlue, modifier = Modifier.size(18.dp))
-                    Text(text = "Accessibility Service", color = TextPrimary, fontSize = 13.sp)
-                }
+                BubbleMock(text = "✖ Cancel", color = Color(0xFFFF5252))
+                Spacer(modifier = Modifier.width(6.dp))
+                BubbleMock(text = "〰 Waveform", color = PrimaryBlue)
+                Spacer(modifier = Modifier.width(6.dp))
+                BubbleMock(text = "✔ Done", color = AccentGreen)
+            }
+
+            Spacer(modifier = Modifier.height(4.dp))
+            Text("When docked on Left Edge:", fontSize = 11.sp, color = PrimaryBlue, fontWeight = FontWeight.Bold)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BubbleMock(text = "✔ Done", color = AccentGreen)
+                Spacer(modifier = Modifier.width(6.dp))
+                BubbleMock(text = "〰 Waveform", color = PrimaryBlue)
+                Spacer(modifier = Modifier.width(6.dp))
+                BubbleMock(text = "✖ Cancel", color = Color(0xFFFF5252))
+            }
+        }
+    }
+
+    SettingsCard(
+        title = "Required System Permissions",
+        icon = Icons.Default.Security
+    ) {
+        // Accessibility Permission
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Accessibility Service", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
                 Text(
-                    text = if (isAccessibilityEnabled) "Active ✓" else "Not Active",
-                    color = if (isAccessibilityEnabled) AccentGreen else AccentRed,
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
+                    text = if (isAccessibilityEnabled) "Service Enabled ✓" else "Service Disabled (Required)",
+                    fontSize = 11.sp,
+                    color = if (isAccessibilityEnabled) AccentGreen else AccentRed
                 )
             }
-        }
-
-        // ==========================================
-        // SECTION 4: ONBOARDING & WALKTHROUGH
-        // ==========================================
-        SettingsSectionCard(
-            title = "Walkthrough & Guide",
-            icon = Icons.Default.Refresh
-        ) {
-            Text(
-                text = "Need to review how FreeFlow works or re-configure permissions?",
-                fontSize = 13.sp,
-                color = TextSecondary
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            OutlinedButton(
-                onClick = {
-                    onReplayOnboarding()
-                },
-                modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = PrimaryBlue)
+            Button(
+                onClick = onEnableAccessibility,
+                colors = ButtonDefaults.buttonColors(containerColor = if (isAccessibilityEnabled) Color(0xFF282832) else PrimaryBlue),
+                modifier = Modifier.height(34.dp)
             ) {
-                Icon(imageVector = Icons.Default.Refresh, contentDescription = "Replay", modifier = Modifier.size(16.dp))
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("Replay Onboarding Guide")
+                Text(if (isAccessibilityEnabled) "Settings" else "Enable", fontSize = 12.sp, color = if (isAccessibilityEnabled) TextPrimary else Color.White)
             }
         }
 
-        // ==========================================
-        // SECTION 5: PRIVACY & ABOUT
-        // ==========================================
-        SettingsSectionCard(
-            title = "Privacy & Local Storage",
-            icon = Icons.Default.Info
+        Spacer(modifier = Modifier.height(12.dp))
+
+        // Display Over Other Apps Permission
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text("Display Over Other Apps", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
+                Text(
+                    text = if (isOverlayEnabled) "Permission Granted ✓" else "Permission Required",
+                    fontSize = 11.sp,
+                    color = if (isOverlayEnabled) AccentGreen else AccentRed
+                )
+            }
+            Button(
+                onClick = onEnableOverlay,
+                colors = ButtonDefaults.buttonColors(containerColor = if (isOverlayEnabled) Color(0xFF282832) else PrimaryBlue),
+                modifier = Modifier.height(34.dp)
+            ) {
+                Text(if (isOverlayEnabled) "Settings" else "Grant", fontSize = 12.sp, color = if (isOverlayEnabled) TextPrimary else Color.White)
+            }
+        }
+    }
+}
+
+// =========================================================================
+// TAB 4: SYSTEM & PRIVACY CONTENT
+// =========================================================================
+@Composable
+private fun SystemPermissionsTabContent(
+    hasMicPermission: Boolean,
+    onRequestMic: () -> Unit,
+    isAccessibilityEnabled: Boolean,
+    onEnableAccessibility: () -> Unit,
+    isOverlayEnabled: Boolean,
+    onEnableOverlay: () -> Unit,
+    onReplayOnboarding: () -> Unit
+) {
+    SettingsCard(
+        title = "Permissions Hub",
+        icon = Icons.Default.Security
+    ) {
+        // Mic
+        PermissionStatusRow(
+            title = "Microphone Access",
+            subtitle = "Captures voice dictation audio",
+            isGranted = hasMicPermission,
+            actionLabel = "Grant",
+            onAction = onRequestMic
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Accessibility
+        PermissionStatusRow(
+            title = "Accessibility Service",
+            subtitle = "Injects text into focused apps",
+            isGranted = isAccessibilityEnabled,
+            actionLabel = "Enable",
+            onAction = onEnableAccessibility
+        )
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Overlay
+        PermissionStatusRow(
+            title = "Display Over Other Apps",
+            subtitle = "Renders floating Wispr capsule",
+            isGranted = isOverlayEnabled,
+            actionLabel = "Grant",
+            onAction = onEnableOverlay
+        )
+    }
+
+    SettingsCard(
+        title = "Quick Settings Notification Tile",
+        icon = Icons.Default.Widgets
+    ) {
+        Text(
+            text = "FreeFlow includes a Quick Settings Tile for 1-tap voice dictation directly from your notification shade.\n\nTo add the tile:\n1. Swipe down twice from the top of your phone.\n2. Tap the pencil (Edit) icon in Quick Settings.\n3. Drag 'FreeFlow Dictate' up into your active tiles.",
+            fontSize = 13.sp,
+            color = TextSecondary,
+            lineHeight = 18.sp
+        )
+    }
+
+    SettingsCard(
+        title = "Privacy & Local SQLite Archive",
+        icon = Icons.Default.Info
+    ) {
+        Text(
+            text = "• 100% Local Archive: All transcribed notes are stored strictly in local on-device SQLite database.\n• Zero Disk Footprint: Audio is streamed in-memory directly to Groq Whisper LPU; zero temporary audio files are stored.\n• 0% Idle Battery Drain: Dictation engines sleep completely when idle.",
+            fontSize = 13.sp,
+            color = TextSecondary,
+            lineHeight = 18.sp
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Button(
+            onClick = onReplayOnboarding,
+            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF282832)),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = TextPrimary)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Replay First-Run Onboarding Flow", color = TextPrimary, fontSize = 13.sp)
+        }
+    }
+}
+
+// =========================================================================
+// HELPER COMPONENTS
+// =========================================================================
+@Composable
+private fun SettingsCard(
+    title: String,
+    icon: ImageVector,
+    content: @Composable () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .background(DarkCard)
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp))
+            .padding(18.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(CircleShape)
+                    .background(PrimaryBlue.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = title,
+                    tint = PrimaryBlue,
+                    modifier = Modifier.size(18.dp)
+                )
+            }
             Text(
-                text = "• 100% In-Memory Audio: Recorded audio is streamed directly to Groq Whisper and never stored on disk.\n" +
-                        "• Local SQLite History: Dictation history is stored entirely on your device in a private database.\n" +
-                        "• Zero Background Telemetry: No background tracking or telemetry.\n" +
-                        "• FreeFlow Version: 1.0.0",
-                fontSize = 12.sp,
-                color = TextSecondary,
-                lineHeight = 18.sp
+                text = title,
+                fontSize = 16.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = TextPrimary
             )
         }
 
-        Spacer(modifier = Modifier.height(30.dp))
+        Spacer(modifier = Modifier.height(14.dp))
+        content()
     }
 }
 
 @Composable
-private fun SettingsSectionCard(
+private fun PermissionStatusRow(
     title: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    content: @Composable () -> Unit
+    subtitle: String,
+    isGranted: Boolean,
+    actionLabel: String,
+    onAction: () -> Unit
 ) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            Text(
+                text = if (isGranted) "Granted ✓" else subtitle,
+                color = if (isGranted) AccentGreen else TextSecondary,
+                fontSize = 11.sp
+            )
+        }
+        if (!isGranted) {
+            Button(
+                onClick = onAction,
+                colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+                modifier = Modifier.height(32.dp)
+            ) {
+                Text(actionLabel, fontSize = 11.sp, color = Color.White)
+            }
+        } else {
+            Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+@Composable
+private fun BubbleMock(text: String, color: Color) {
     Box(
         modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(18.dp))
-            .background(DarkCard)
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(18.dp))
-            .padding(16.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(color.copy(alpha = 0.2f))
+            .border(1.dp, color, RoundedCornerShape(12.dp))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        contentAlignment = Alignment.Center
     ) {
-        Column {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Icon(imageVector = icon, contentDescription = title, tint = PrimaryBlue, modifier = Modifier.size(20.dp))
-                Text(text = title, fontSize = 16.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
-            }
-
-            Spacer(modifier = Modifier.height(14.dp))
-
-            content()
-        }
+        Text(text, fontSize = 10.sp, color = color, fontWeight = FontWeight.Bold)
     }
 }

@@ -53,6 +53,7 @@ class FreeFlowAccessibilityService : AccessibilityService() {
     private var currentFocusedNode: AccessibilityNodeInfo? = null
     private var currentPackageName: String? = null
     private var excludedPackages = setOf<String>()
+    private var isBubbleEnabled: Boolean = true
 
     override fun onCreate() {
         super.onCreate()
@@ -78,7 +79,21 @@ class FreeFlowAccessibilityService : AccessibilityService() {
         serviceScope.launch {
             preferences.settingsFlow.collectLatest { settings ->
                 excludedPackages = settings.excludedPackages
+                isBubbleEnabled = settings.isFloatingBubbleEnabled
+                if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this@FreeFlowAccessibilityService)) {
+                    overlayManager?.show()
+                } else {
+                    overlayManager?.hide()
+                }
             }
+        }
+    }
+
+    override fun onServiceConnected() {
+        super.onServiceConnected()
+        Log.i(TAG, "FreeFlowAccessibilityService connected successfully.")
+        if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this)) {
+            overlayManager?.show()
         }
     }
 
@@ -102,15 +117,18 @@ class FreeFlowAccessibilityService : AccessibilityService() {
                     return
                 }
 
-                // If window changed to a non-editable surface, hide the overlay
                 val rootNode = rootInActiveWindow
                 if (rootNode != null) {
                     val focused = rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                    if (focused != null && isNodeEditable(focused)) {
+                    if (focused != null) {
                         handleNodeFocused(focused)
-                    } else {
-                        overlayManager?.hide()
+                        return
                     }
+                }
+
+                // Keep overlay steadily visible if floating bubble is enabled and permission granted
+                if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this)) {
+                    overlayManager?.show()
                 }
             }
         }
@@ -134,12 +152,9 @@ class FreeFlowAccessibilityService : AccessibilityService() {
             return
         }
 
-        // 2. Check if the focused view is an editable text field
-        if (isNodeEditable(node)) {
-            Log.d(TAG, "Editable text view focused in $pkg. Showing floating HUD.")
+        // Keep overlay active for user dictation
+        if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this)) {
             overlayManager?.show()
-        } else {
-            overlayManager?.hide()
         }
     }
 

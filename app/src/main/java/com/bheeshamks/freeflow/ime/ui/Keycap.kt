@@ -38,7 +38,11 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bheeshamks.freeflow.R
 import com.bheeshamks.freeflow.core.data.model.HapticStrength
+import com.bheeshamks.freeflow.core.data.model.KeyBorderStyle
+import com.bheeshamks.freeflow.core.data.model.KeyPreviewInfo
+import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
 import com.bheeshamks.freeflow.ime.KeysCafeController
+import com.bheeshamks.freeflow.ime.audio.KeyboardSoundPlayer
 import com.bheeshamks.freeflow.ime.model.KeyModel
 import com.bheeshamks.freeflow.ime.model.KeyType
 import com.bheeshamks.freeflow.ime.model.ShiftState
@@ -56,12 +60,14 @@ fun Keycap(
     key: KeyModel,
     shiftState: ShiftState,
     keysCafeController: KeysCafeController?,
-    hapticStrength: HapticStrength,
+    settings: KeyboardSettings,
     keyHeight: Dp,
     cornerRadius: Dp,
     onKeyPress: (KeyModel) -> Unit,
     onKeyLongPress: (KeyModel) -> Unit = {},
     onCursorDrag: (Float) -> Unit = {},
+    soundPlayer: KeyboardSoundPlayer? = null,
+    onKeyPreviewChange: (KeyPreviewInfo?) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -71,10 +77,12 @@ fun Keycap(
     var isPressed by remember { mutableStateOf(false) }
     var rootTopLeft by remember { mutableStateOf(Offset.Zero) }
     var rootCenter by remember { mutableStateOf(Offset.Zero) }
+    var rootBounds by remember { mutableStateOf(androidx.compose.ui.geometry.Rect.Zero) }
 
-    fun playHaptic() {
-        if (hapticStrength == HapticStrength.OFF) return
-        val effect = when (hapticStrength) {
+    fun playFeedback() {
+        soundPlayer?.playKeySound(settings.soundTheme, settings.soundVolume)
+        if (settings.hapticStrength == HapticStrength.OFF) return
+        val effect = when (settings.hapticStrength) {
             HapticStrength.TICK -> VibrationEffect.EFFECT_TICK
             HapticStrength.CLICK -> VibrationEffect.EFFECT_CLICK
             HapticStrength.HEAVY_CLICK -> VibrationEffect.EFFECT_HEAVY_CLICK
@@ -99,9 +107,23 @@ fun Keycap(
     val isSpecialKey = key.keyType in listOf(KeyType.SHIFT, KeyType.BACKSPACE, KeyType.ENTER, KeyType.SYMBOLS_TOGGLE)
 
     val backgroundColor = when {
-        isPressed -> Color(0xFF282832)
-        isSpecialKey -> Color(0xFF141418)
-        else -> Color(0xFF18181C)
+        isPressed -> Color(settings.colorPreset.primaryColor).copy(alpha = 0.4f)
+        isSpecialKey -> Color(settings.keyboardTheme.specialKeyHex)
+        else -> Color(settings.keyboardTheme.keyHex)
+    }
+
+    val borderModifier = when (settings.borderStyle) {
+        KeyBorderStyle.NO_BORDER -> Modifier
+        KeyBorderStyle.SUBTLE -> Modifier.border(
+            width = 0.8.dp,
+            color = if (isPressed) Color(settings.colorPreset.primaryColor) else Color(0x22FFFFFF),
+            shape = RoundedCornerShape(cornerRadius)
+        )
+        KeyBorderStyle.GLOW_ACCENT -> Modifier.border(
+            width = 1.dp,
+            color = if (isPressed) Color(settings.colorPreset.primaryColor) else Color(settings.colorPreset.outerGlowColor).copy(alpha = 0.55f),
+            shape = RoundedCornerShape(cornerRadius)
+        )
     }
 
     Box(
@@ -112,27 +134,24 @@ fun Keycap(
                 val bounds = coordinates.boundsInRoot()
                 rootTopLeft = bounds.topLeft
                 rootCenter = bounds.center
+                rootBounds = bounds
             }
             .clip(RoundedCornerShape(cornerRadius))
             .background(backgroundColor)
-            .border(
-                width = 0.8.dp,
-                color = if (isPressed) Color(0x665AB4FF) else Color(0x22FFFFFF),
-                shape = RoundedCornerShape(cornerRadius)
-            )
-            .pointerInput(key, shiftState, hapticStrength) {
+            .then(borderModifier)
+            .pointerInput(key, shiftState, settings) {
                 if (key.keyType == KeyType.SPACE) {
                     // Spacebar supports horizontal swipe to move cursor
                     detectDragGestures(
                         onDragStart = { offset ->
                             isPressed = true
-                            playHaptic()
+                            playFeedback()
                             keysCafeController?.triggerBloom(
                                 offset = rootTopLeft + offset,
-                                colorPreset = com.bheeshamks.freeflow.core.data.model.BloomColorPreset.ICY_BLUE,
-                                style = com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle.RADIAL_BLOOM,
-                                maxRadiusPx = 250f,
-                                durationMs = 350
+                                colorPreset = settings.colorPreset,
+                                style = settings.animationStyle,
+                                maxRadiusPx = settings.bloomRadiusDp * 2.5f,
+                                durationMs = settings.animationSpeedMs
                             )
                         },
                         onDragEnd = { isPressed = false },
@@ -147,13 +166,13 @@ fun Keycap(
                     detectTapGestures(
                         onPress = { offset ->
                             isPressed = true
-                            playHaptic()
+                            playFeedback()
                             keysCafeController?.triggerBloom(
                                 offset = rootTopLeft + offset,
-                                colorPreset = com.bheeshamks.freeflow.core.data.model.BloomColorPreset.ICY_BLUE,
-                                style = com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle.RADIAL_BLOOM,
-                                maxRadiusPx = 250f,
-                                durationMs = 350
+                                colorPreset = settings.colorPreset,
+                                style = settings.animationStyle,
+                                maxRadiusPx = settings.bloomRadiusDp * 2.5f,
+                                durationMs = settings.animationSpeedMs
                             )
                             onKeyPress(key)
 
@@ -161,7 +180,7 @@ fun Keycap(
                                 delay(400) // Initial hold delay
                                 var repeatInterval = 100L
                                 while (isActive && isPressed) {
-                                    playHaptic()
+                                    playFeedback()
                                     onKeyPress(key)
                                     delay(repeatInterval)
                                     if (repeatInterval > 40L) {
@@ -179,16 +198,27 @@ fun Keycap(
                     detectTapGestures(
                         onPress = { offset ->
                             isPressed = true
-                            playHaptic()
+                            playFeedback()
+                            if (settings.showKeyPreviewPopup && (key.keyType == KeyType.CHARACTER || key.keyType == KeyType.PERIOD)) {
+                                onKeyPreviewChange(
+                                    KeyPreviewInfo(
+                                        text = displayText,
+                                        rootOffset = rootTopLeft,
+                                        keyWidthPx = rootBounds.width,
+                                        keyHeightPx = rootBounds.height
+                                    )
+                                )
+                            }
                             keysCafeController?.triggerBloom(
                                 offset = rootTopLeft + offset,
-                                colorPreset = com.bheeshamks.freeflow.core.data.model.BloomColorPreset.ICY_BLUE,
-                                style = com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle.RADIAL_BLOOM,
-                                maxRadiusPx = 250f,
-                                durationMs = 350
+                                colorPreset = settings.colorPreset,
+                                style = settings.animationStyle,
+                                maxRadiusPx = settings.bloomRadiusDp * 2.5f,
+                                durationMs = settings.animationSpeedMs
                             )
                             tryAwaitRelease()
                             isPressed = false
+                            onKeyPreviewChange(null)
                         },
                         onTap = {
                             onKeyPress(key)

@@ -175,11 +175,12 @@ class GroqWhisperClient(
     /**
      * Tests connectivity and validates the API key against the Groq models endpoint.
      *
+     * @param explicitApiKey Optional API key to validate, defaults to key from [apiKeyProvider].
      * @return [Result] with count of available models, or exception on failure.
      */
-    suspend fun testConnection(): Result<Int> = withContext(Dispatchers.IO) {
+    suspend fun testConnection(explicitApiKey: String? = null): Result<Int> = withContext(Dispatchers.IO) {
         runCatching {
-            val apiKey = apiKeyProvider()
+            val apiKey = explicitApiKey?.ifBlank { null } ?: apiKeyProvider()
             if (apiKey.isNullOrBlank()) {
                 throw IllegalStateException("API key is blank.")
             }

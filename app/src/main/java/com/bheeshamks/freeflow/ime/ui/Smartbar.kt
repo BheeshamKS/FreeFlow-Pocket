@@ -152,17 +152,17 @@ fun Smartbar(
                         )
                     }
 
-                    // Overflow / Extra Options
+                    // Overflow / Suggestions Toggle
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable { onTranslateClick() },
+                            .clickable { onCollapseClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
                             imageVector = Icons.Default.MoreHoriz,
-                            contentDescription = "Overflow",
+                            contentDescription = "Suggestions Toggle",
                             tint = Color.White,
                             modifier = Modifier.size(22.dp)
                         )

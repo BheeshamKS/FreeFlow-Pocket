@@ -21,6 +21,7 @@ import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
+import com.bheeshamks.freeflow.ime.audio.KeyboardSoundPlayer
 import com.bheeshamks.freeflow.ime.lifecycle.ImeLifecycleHost
 import com.bheeshamks.freeflow.ime.model.KeyModel
 import com.bheeshamks.freeflow.ime.model.KeyType
@@ -69,6 +70,8 @@ class FreeFlowIMEService : InputMethodService() {
     private var isVoiceTranscribing by mutableStateOf(false)
 
     private val sampleSuggestions = listOf("The", "What", "How")
+    private var composeInputView: ComposeView? = null
+    private var soundPlayer: KeyboardSoundPlayer? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -80,6 +83,7 @@ class FreeFlowIMEService : InputMethodService() {
         groqClient = GroqWhisperClient(apiKeyProvider = { apiKeyStore.getApiKey() })
         historyDb = HistoryDatabase.getInstance(this)
         vibrator = getSystemService(VIBRATOR_SERVICE) as Vibrator
+        soundPlayer = KeyboardSoundPlayer(this)
 
         serviceScope.launch {
             preferences.settingsFlow.collectLatest { settings ->
@@ -90,15 +94,15 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onEvaluateFullscreenMode(): Boolean = false
 
-    override fun updateFullscreenMode() {
-        super.updateFullscreenMode()
-        window?.window?.let { win ->
-            win.setLayout(
-                android.view.ViewGroup.LayoutParams.MATCH_PARENT,
-                android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-            )
-            win.setGravity(android.view.Gravity.BOTTOM)
-        }
+    override fun onComputeInsets(outInsets: Insets) {
+        super.onComputeInsets(outInsets)
+        val view = composeInputView ?: return
+        val loc = IntArray(2)
+        view.getLocationInWindow(loc)
+        outInsets.contentTopInsets = loc[1]
+        outInsets.visibleTopInsets = loc[1]
+        outInsets.touchableInsets = Insets.TOUCHABLE_INSETS_CONTENT
+        outInsets.touchableRegion.set(loc[0], loc[1], loc[0] + view.width, loc[1] + view.height)
     }
 
     override fun onCreateInputView(): View {
@@ -107,6 +111,7 @@ class FreeFlowIMEService : InputMethodService() {
 
         val decor = window?.window?.decorView
         return ComposeView(this).apply {
+            composeInputView = this
             layoutParams = android.view.ViewGroup.LayoutParams(
                 android.view.ViewGroup.LayoutParams.MATCH_PARENT,
                 android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -161,6 +166,10 @@ class FreeFlowIMEService : InputMethodService() {
                     onTranslateClick = {
                         handleCaseToggle()
                     },
+                    onToggleSmartbarState = {
+                        smartbarState = if (smartbarState == SmartbarState.TOOLBAR) SmartbarState.SUGGESTIONS else SmartbarState.TOOLBAR
+                    },
+                    soundPlayer = soundPlayer,
                     activeLayer = activeLayer,
                     shiftState = shiftState,
                     smartbarState = smartbarState,
@@ -368,6 +377,8 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onDestroy() {
         super.onDestroy()
+        soundPlayer?.release()
+        soundPlayer = null
         lifecycleHost.onDestroy()
         serviceScope.cancel()
     }

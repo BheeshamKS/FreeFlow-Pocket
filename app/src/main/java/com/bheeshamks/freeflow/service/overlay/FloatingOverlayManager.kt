@@ -77,6 +77,36 @@ class FloatingOverlayManager(
         _errorMessage.value = message
     }
 
+    private fun updatePositionForNewSize(newWidth: Int, newHeight: Int) {
+        val p = windowLayoutParams ?: return
+        if (newWidth <= 0 || newHeight <= 0) return
+
+        val metrics = service.resources.displayMetrics
+        val screenWidth = metrics.widthPixels
+        val screenHeight = metrics.heightPixels
+        val edgeMarginPx = (12 * metrics.density).toInt()
+
+        if (_isDockedOnRight.value) {
+            // Anchor to right screen edge so the entire expanded capsule stays inside
+            p.x = screenWidth - newWidth - edgeMarginPx
+        } else {
+            p.x = edgeMarginPx
+        }
+
+        // Clamp Y so it never renders off the top or bottom edge
+        val topLimit = (80 * metrics.density).toInt()
+        val bottomLimit = screenHeight - newHeight - (100 * metrics.density).toInt()
+        p.y = p.y.coerceIn(topLimit, bottomLimit.coerceAtLeast(topLimit))
+
+        if (isViewAttached && composeView != null) {
+            try {
+                windowManager.updateViewLayout(composeView, p)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error updating window layout for new size", e)
+            }
+        }
+    }
+
     fun show() {
         if (isViewAttached) return
 
@@ -161,6 +191,9 @@ class FloatingOverlayManager(
                                     windowManager.updateViewLayout(composeView, p)
                                 }
                             }
+                        },
+                        onContentSizeChanged = { w, h ->
+                            updatePositionForNewSize(w, h)
                         }
                     )
                 }

@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -61,8 +62,8 @@ fun KeyboardVoiceHUD(
 
     Box(
         modifier = modifier
-            .fillMaxSize()
-            .background(Color(0xE6000000))
+            .fillMaxWidth()
+            .background(Color(0xF2121216))
             .clickable { onStopClick() },
         contentAlignment = Alignment.Center
     ) {

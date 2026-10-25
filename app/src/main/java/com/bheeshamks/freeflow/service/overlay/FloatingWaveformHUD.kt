@@ -43,6 +43,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -77,6 +78,7 @@ fun FloatingWaveformHUD(
     onErrorClick: () -> Unit,
     onDragDelta: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
+    onContentSizeChanged: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -108,6 +110,7 @@ fun FloatingWaveformHUD(
 
     Box(
         modifier = modifier
+            .onSizeChanged { onContentSizeChanged(it.width, it.height) }
             .pointerInput(Unit) {
                 detectDragGestures(
                     onDrag = { change, dragAmount ->
