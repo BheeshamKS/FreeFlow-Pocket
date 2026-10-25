@@ -13,12 +13,27 @@ android {
         applicationId = "com.bheeshamks.freeflow"
         minSdk = 26
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
+        }
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            enableV1Signing = true
+            enableV2Signing = true
+        }
+        create("release") {
+            storeFile = file("${System.getProperty("user.home")}/.android/debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+            enableV1Signing = true
+            enableV2Signing = true
         }
     }
 
@@ -30,11 +45,12 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.getByName("release")
         }
         debug {
             applicationIdSuffix = ".debug"
             isDebuggable = true
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
