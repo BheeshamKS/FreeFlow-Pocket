@@ -51,6 +51,7 @@ fun Smartbar(
     suggestions: List<String>,
     onSuggestionClick: (String) -> Unit,
     onCollapseClick: () -> Unit,
+    onToolsMenuClick: () -> Unit = {},
     onEmojiClick: () -> Unit,
     onTranslateClick: () -> Unit,
     onClipboardClick: () -> Unit,
@@ -152,12 +153,12 @@ fun Smartbar(
                         )
                     }
 
-                    // Overflow / Suggestions Toggle
+                    // Overflow / Tools Menu Toggle
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable { onCollapseClick() },
+                            .clickable { onToolsMenuClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -193,7 +194,7 @@ fun Smartbar(
                     Spacer(modifier = Modifier.width(4.dp))
 
                     // 3 Word Suggestions
-                    val displaySuggestions = suggestions.take(3).ifEmpty { listOf("The", "What", "How") }
+                    val displaySuggestions = suggestions.take(3)
                     Row(
                         modifier = Modifier.weight(1f),
                         horizontalArrangement = Arrangement.SpaceEvenly,
@@ -214,12 +215,12 @@ fun Smartbar(
                         }
                     }
 
-                    // Overflow with green dot
+                    // Overflow with green dot - opens Tools Menu
                     Box(
                         modifier = Modifier
                             .size(44.dp)
                             .clip(CircleShape)
-                            .clickable { onCollapseClick() },
+                            .clickable { onToolsMenuClick() },
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(

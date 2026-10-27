@@ -39,7 +39,8 @@ enum class KeyboardViewState {
     KEYBOARD,
     EMOJI_PICKER,
     EMOJI_SEARCH,
-    CLIPBOARD
+    CLIPBOARD,
+    TOOLS_MENU
 }
 
 /**

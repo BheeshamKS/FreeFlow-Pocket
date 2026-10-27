@@ -15,6 +15,7 @@ import com.bheeshamks.freeflow.core.data.db.HistoryDatabase
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
+import com.bheeshamks.freeflow.ime.FreeFlowIMEService
 import com.bheeshamks.freeflow.service.overlay.FloatingOverlayManager
 import com.bheeshamks.freeflow.service.overlay.OverlayHudState
 import com.bheeshamks.freeflow.service.text.TextInjector
@@ -26,6 +27,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 /**
@@ -54,6 +56,7 @@ class FreeFlowAccessibilityService : AccessibilityService() {
     private var currentPackageName: String? = null
     private var excludedPackages = setOf<String>()
     private var isBubbleEnabled: Boolean = true
+    private var hideOnKeyboard: Boolean = true
 
     override fun onCreate() {
         super.onCreate()
@@ -72,18 +75,30 @@ class FreeFlowAccessibilityService : AccessibilityService() {
             onStopRecording = { stopVoiceRecordingAndInject() },
             onCancelRecording = { cancelVoiceRecording() },
             onDismissOverlay = { overlayManager?.hide() },
-            amplitudeFlow = audioCaptureManager.amplitude
+            amplitudeFlow = audioCaptureManager.amplitude,
+            preferences = preferences
         )
 
-        // Observe preferences
+        // Observe preferences and active keyboard visibility
         serviceScope.launch {
-            preferences.settingsFlow.collectLatest { settings ->
+            combine(
+                preferences.settingsFlow,
+                FreeFlowIMEService.isImeVisible
+            ) { settings, imeVisible ->
+                Pair(settings, imeVisible)
+            }.collectLatest { (settings, imeVisible) ->
                 excludedPackages = settings.excludedPackages
                 isBubbleEnabled = settings.isFloatingBubbleEnabled
-                if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this@FreeFlowAccessibilityService)) {
-                    overlayManager?.show()
-                } else {
+                hideOnKeyboard = settings.hideBubbleOnKeyboard
+
+                val isEditableFocused = currentFocusedNode?.let { isNodeEditable(it) } ?: false
+
+                if (!isBubbleEnabled || !android.provider.Settings.canDrawOverlays(this@FreeFlowAccessibilityService)) {
                     overlayManager?.hide()
+                } else if (hideOnKeyboard && (imeVisible || isEditableFocused)) {
+                    overlayManager?.hide()
+                } else {
+                    overlayManager?.show()
                 }
             }
         }
@@ -101,7 +116,9 @@ class FreeFlowAccessibilityService : AccessibilityService() {
         if (event == null) return
 
         when (event.eventType) {
-            AccessibilityEvent.TYPE_VIEW_FOCUSED -> {
+            AccessibilityEvent.TYPE_VIEW_FOCUSED,
+            AccessibilityEvent.TYPE_VIEW_CLICKED,
+            AccessibilityEvent.TYPE_VIEW_TEXT_SELECTION_CHANGED -> {
                 val source = event.source ?: return
                 currentPackageName = event.packageName?.toString()
                 handleNodeFocused(source)
@@ -148,6 +165,13 @@ class FreeFlowAccessibilityService : AccessibilityService() {
         val pkg = currentPackageName ?: node.packageName?.toString()
         if (pkg != null && excludedPackages.contains(pkg)) {
             Log.d(TAG, "Excluded app focused ($pkg). Suppressing floating HUD.")
+            overlayManager?.hide()
+            return
+        }
+
+        // Suppress floating HUD when textbox is selected if hideOnKeyboard is enabled
+        if (hideOnKeyboard && (isNodeEditable(node) || FreeFlowIMEService.isImeVisible.value)) {
+            Log.d(TAG, "Textbox focused or IME active. Suppressing floating HUD.")
             overlayManager?.hide()
             return
         }

@@ -133,6 +133,8 @@ fun SettingsScreen(
     preferences: ThemeAndGoodiesPreferences,
     groqClient: GroqWhisperClient,
     onReplayOnboarding: () -> Unit,
+    initialSubTab: SettingsSubTab? = null,
+    onSubTabChanged: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -140,7 +142,14 @@ fun SettingsScreen(
     val scope = rememberCoroutineScope()
     val settings by preferences.settingsFlow.collectAsState(initial = KeyboardSettings())
 
-    var activeTab by remember { mutableStateOf(SettingsSubTab.VOICE_API) }
+    var activeTab by remember { mutableStateOf(initialSubTab ?: SettingsSubTab.VOICE_API) }
+
+    LaunchedEffect(initialSubTab) {
+        initialSubTab?.let {
+            activeTab = it
+            onSubTabChanged?.invoke()
+        }
+    }
 
     var apiKeyInput by remember { mutableStateOf("") }
     var isKeyVisible by remember { mutableStateOf(false) }
@@ -984,6 +993,39 @@ private fun WisprBubbleTabContent(
                 onCheckedChange = { scope.launch { preferences.setFloatingBubbleEnabled(it) } },
                 colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryBlue)
             )
+        }
+
+        if (settings.isFloatingBubbleEnabled) {
+            Spacer(modifier = Modifier.height(16.dp))
+            Text(
+                text = "Bubble Opacity: ${(settings.floatingBubbleOpacity * 100).toInt()}%",
+                color = TextPrimary,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Medium
+            )
+            Slider(
+                value = settings.floatingBubbleOpacity,
+                onValueChange = { scope.launch { preferences.updateFloatingBubbleOpacity(it) } },
+                valueRange = 0.2f..1.0f,
+                colors = SliderDefaults.colors(thumbColor = PrimaryBlue, activeTrackColor = PrimaryBlue)
+            )
+
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text("Hide When Text Box Selected", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Medium)
+                    Text("Auto-hide floating bubble when typing so it never covers your keyboard or text", color = TextSecondary, fontSize = 12.sp)
+                }
+                Switch(
+                    checked = settings.hideBubbleOnKeyboard,
+                    onCheckedChange = { scope.launch { preferences.setHideBubbleOnKeyboard(it) } },
+                    colors = SwitchDefaults.colors(checkedThumbColor = Color.White, checkedTrackColor = PrimaryBlue)
+                )
+            }
         }
     }
 

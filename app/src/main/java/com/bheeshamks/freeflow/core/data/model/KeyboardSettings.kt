@@ -123,5 +123,7 @@ data class KeyboardSettings(
     val isKeysCafeEnabled: Boolean = true,
     val isOnboardingCompleted: Boolean = false,
     val isFloatingBubbleEnabled: Boolean = true,
+    val floatingBubbleOpacity: Float = 0.5f,
+    val hideBubbleOnKeyboard: Boolean = true,
     val groqModel: String = "whisper-large-v3"
 )

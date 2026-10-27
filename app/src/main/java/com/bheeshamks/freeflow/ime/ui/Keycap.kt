@@ -7,7 +7,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.waitForUpOrCancellation
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.ui.input.pointer.positionChange
@@ -133,7 +133,7 @@ fun Keycap(
     Box(
         modifier = modifier
             .height(keyHeight)
-            .padding(horizontal = 2.5.dp, vertical = 3.dp)
+            .padding(horizontal = 1.5.dp, vertical = 2.5.dp)
             .onGloballyPositioned { coordinates ->
                 val bounds = coordinates.boundsInRoot()
                 rootTopLeft = bounds.topLeft
@@ -187,71 +187,66 @@ fun Keycap(
                         }
                     }
                 } else if (key.keyType == KeyType.BACKSPACE) {
-                    // Backspace with coroutine-based acceleration
-                    detectTapGestures(
-                        onPress = { offset ->
-                            isPressed = true
-                            playFeedback()
-                            keysCafeController?.triggerBloom(
-                                offset = rootTopLeft + offset,
-                                colorPreset = settings.colorPreset,
-                                style = settings.animationStyle,
-                                maxRadiusPx = settings.bloomRadiusDp * 2.5f,
-                                durationMs = settings.animationSpeedMs
-                            )
-                            onKeyPress(key)
+                    // Backspace with responsive tap & accelerated repeat
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+                        playFeedback()
+                        keysCafeController?.triggerBloom(
+                            offset = rootTopLeft + down.position,
+                            colorPreset = settings.colorPreset,
+                            style = settings.animationStyle,
+                            maxRadiusPx = settings.bloomRadiusDp * 2.5f,
+                            durationMs = settings.animationSpeedMs
+                        )
+                        onKeyPress(key)
 
-                            val repeatJob: Job = scope.launch {
-                                delay(400) // Initial hold delay
-                                var repeatInterval = 100L
-                                while (isActive && isPressed) {
-                                    playFeedback()
-                                    onKeyPress(key)
-                                    delay(repeatInterval)
-                                    if (repeatInterval > 40L) {
-                                        repeatInterval -= 10L // Accelerate
-                                    }
+                        val repeatJob: Job = scope.launch {
+                            delay(350) // Initial hold delay
+                            var repeatInterval = 90L
+                            while (isActive && isPressed) {
+                                playFeedback()
+                                onKeyPress(key)
+                                delay(repeatInterval)
+                                if (repeatInterval > 35L) {
+                                    repeatInterval -= 10L // Accelerate
                                 }
                             }
+                        }
 
-                            tryAwaitRelease()
-                            repeatJob.cancel()
-                            isPressed = false
-                        }
-                    )
+                        waitForUpOrCancellation()
+                        repeatJob.cancel()
+                        isPressed = false
+                    }
                 } else {
-                    detectTapGestures(
-                        onPress = { offset ->
-                            isPressed = true
-                            playFeedback()
-                            if (settings.showKeyPreviewPopup && (key.keyType == KeyType.CHARACTER || key.keyType == KeyType.PERIOD)) {
-                                onKeyPreviewChange(
-                                    KeyPreviewInfo(
-                                        text = displayText,
-                                        rootOffset = rootTopLeft,
-                                        keyWidthPx = rootBounds.width,
-                                        keyHeightPx = rootBounds.height
-                                    )
+                    // Character, Symbol, and Action Keys: Zero-latency touch response
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        isPressed = true
+                        playFeedback()
+                        if (settings.showKeyPreviewPopup && (key.keyType == KeyType.CHARACTER || key.keyType == KeyType.PERIOD)) {
+                            onKeyPreviewChange(
+                                KeyPreviewInfo(
+                                    text = displayText,
+                                    rootOffset = rootTopLeft,
+                                    keyWidthPx = rootBounds.width,
+                                    keyHeightPx = rootBounds.height
                                 )
-                            }
-                            keysCafeController?.triggerBloom(
-                                offset = rootTopLeft + offset,
-                                colorPreset = settings.colorPreset,
-                                style = settings.animationStyle,
-                                maxRadiusPx = settings.bloomRadiusDp * 2.5f,
-                                durationMs = settings.animationSpeedMs
                             )
-                            tryAwaitRelease()
-                            isPressed = false
-                            onKeyPreviewChange(null)
-                        },
-                        onTap = {
-                            onKeyPress(key)
-                        },
-                        onLongPress = {
-                            onKeyLongPress(key)
                         }
-                    )
+                        keysCafeController?.triggerBloom(
+                            offset = rootTopLeft + down.position,
+                            colorPreset = settings.colorPreset,
+                            style = settings.animationStyle,
+                            maxRadiusPx = settings.bloomRadiusDp * 2.5f,
+                            durationMs = settings.animationSpeedMs
+                        )
+                        onKeyPress(key)
+
+                        waitForUpOrCancellation()
+                        isPressed = false
+                        onKeyPreviewChange(null)
+                    }
                 }
             },
         contentAlignment = Alignment.Center

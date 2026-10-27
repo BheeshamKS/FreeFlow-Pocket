@@ -21,6 +21,8 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
+import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.ui.MainActivity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -35,7 +37,8 @@ class FloatingOverlayManager(
     private val onStopRecording: () -> Unit,
     private val onCancelRecording: () -> Unit,
     private val onDismissOverlay: () -> Unit,
-    private val amplitudeFlow: StateFlow<Float>
+    private val amplitudeFlow: StateFlow<Float>,
+    private val preferences: ThemeAndGoodiesPreferences? = null
 ) : LifecycleOwner, ViewModelStoreOwner, SavedStateRegistryOwner {
 
     companion object {
@@ -138,6 +141,7 @@ class FloatingOverlayManager(
                 setViewTreeSavedStateRegistryOwner(this@FloatingOverlayManager)
 
                 setContent {
+                    val settings by (preferences?.settingsFlow ?: kotlinx.coroutines.flow.emptyFlow()).collectAsState(initial = KeyboardSettings())
                     val state by _hudState.collectAsState()
                     val dockedOnRight by _isDockedOnRight.collectAsState()
                     val err by _errorMessage.collectAsState()
@@ -147,6 +151,7 @@ class FloatingOverlayManager(
                         isDockedOnRight = dockedOnRight,
                         errorMessage = err,
                         amplitudeFlow = amplitudeFlow,
+                        opacity = settings.floatingBubbleOpacity,
                         onStartRecording = onStartRecording,
                         onStopRecording = onStopRecording,
                         onCancel = onCancelRecording,

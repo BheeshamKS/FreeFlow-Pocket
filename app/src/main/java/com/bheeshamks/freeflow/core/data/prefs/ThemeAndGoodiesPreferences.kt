@@ -47,6 +47,8 @@ class ThemeAndGoodiesPreferences(private val context: Context) {
         private val KEY_KEYS_CAFE_ENABLED = booleanPreferencesKey("keys_cafe_enabled")
         private val KEY_ONBOARDING_COMPLETED = booleanPreferencesKey("onboarding_completed")
         private val KEY_FLOATING_BUBBLE_ENABLED = booleanPreferencesKey("floating_bubble_enabled")
+        private val KEY_FLOATING_BUBBLE_OPACITY = floatPreferencesKey("floating_bubble_opacity")
+        private val KEY_HIDE_BUBBLE_ON_KEYBOARD = booleanPreferencesKey("hide_bubble_on_keyboard")
         private val KEY_GROQ_MODEL = stringPreferencesKey("groq_model")
     }
 
@@ -78,6 +80,8 @@ class ThemeAndGoodiesPreferences(private val context: Context) {
             isKeysCafeEnabled = prefs[KEY_KEYS_CAFE_ENABLED] ?: true,
             isOnboardingCompleted = prefs[KEY_ONBOARDING_COMPLETED] ?: false,
             isFloatingBubbleEnabled = prefs[KEY_FLOATING_BUBBLE_ENABLED] ?: true,
+            floatingBubbleOpacity = prefs[KEY_FLOATING_BUBBLE_OPACITY] ?: 0.5f,
+            hideBubbleOnKeyboard = prefs[KEY_HIDE_BUBBLE_ON_KEYBOARD] ?: true,
             groqModel = prefs[KEY_GROQ_MODEL] ?: "whisper-large-v3"
         )
     }
@@ -136,6 +140,14 @@ class ThemeAndGoodiesPreferences(private val context: Context) {
 
     suspend fun setFloatingBubbleEnabled(enabled: Boolean) {
         context.dataStore.edit { it[KEY_FLOATING_BUBBLE_ENABLED] = enabled }
+    }
+
+    suspend fun updateFloatingBubbleOpacity(opacity: Float) {
+        context.dataStore.edit { it[KEY_FLOATING_BUBBLE_OPACITY] = opacity.coerceIn(0.1f, 1.0f) }
+    }
+
+    suspend fun setHideBubbleOnKeyboard(hide: Boolean) {
+        context.dataStore.edit { it[KEY_HIDE_BUBBLE_ON_KEYBOARD] = hide }
     }
 
     suspend fun updateGroqModel(model: String) {

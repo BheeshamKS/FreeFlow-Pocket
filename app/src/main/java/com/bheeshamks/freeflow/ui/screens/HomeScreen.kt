@@ -67,11 +67,13 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.bheeshamks.freeflow.R
 import com.bheeshamks.freeflow.core.audio.AudioCaptureManager
 import com.bheeshamks.freeflow.core.data.db.DictationEntity
 import com.bheeshamks.freeflow.core.data.db.HistoryDatabase
@@ -235,18 +237,29 @@ fun HomeScreen(
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Column {
-                Text(
-                    text = "FreeFlow",
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = TextPrimary
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Icon(
+                    painter = painterResource(id = R.drawable.ic_freeflow_logo),
+                    contentDescription = "FreeFlow Logo",
+                    tint = Color.Unspecified,
+                    modifier = Modifier.size(38.dp)
                 )
-                Text(
-                    text = "Whisper Large V3 via Groq LPU",
-                    fontSize = 13.sp,
-                    color = PrimaryBlue
-                )
+                Column {
+                    Text(
+                        text = "FreeFlow",
+                        fontSize = 26.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = TextPrimary
+                    )
+                    Text(
+                        text = "Whisper Large V3 via Groq LPU",
+                        fontSize = 13.sp,
+                        color = PrimaryBlue
+                    )
+                }
             }
 
             if (!hasApiKey) {

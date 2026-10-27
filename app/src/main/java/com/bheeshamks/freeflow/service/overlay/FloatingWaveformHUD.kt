@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -78,6 +79,7 @@ fun FloatingWaveformHUD(
     onErrorClick: () -> Unit,
     onDragDelta: (Float, Float) -> Unit,
     onDragEnd: () -> Unit,
+    opacity: Float = 0.5f,
     onContentSizeChanged: (Int, Int) -> Unit = { _, _ -> },
     modifier: Modifier = Modifier
 ) {
@@ -125,10 +127,11 @@ fun FloatingWaveformHUD(
     ) {
         when (hudState) {
             OverlayHudState.IDLE -> {
-                // Compact Floating Mic Bubble
+                // Compact Floating Mic Bubble (Semi-transparent per user setting)
                 Box(
                     modifier = Modifier
                         .size(52.dp)
+                        .alpha(opacity)
                         .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = Color(0x66000000))
                         .clip(CircleShape)
                         .background(

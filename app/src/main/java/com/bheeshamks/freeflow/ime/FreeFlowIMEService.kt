@@ -2,6 +2,7 @@ package com.bheeshamks.freeflow.ime
 
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
+import android.net.Uri
 import android.os.Build
 import android.os.VibrationEffect
 import android.os.Vibrator
@@ -14,6 +15,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.ComposeView
+import androidx.core.view.inputmethod.InputConnectionCompat
+import androidx.core.view.inputmethod.InputContentInfoCompat
 import com.bheeshamks.freeflow.core.audio.AudioCaptureManager
 import com.bheeshamks.freeflow.core.data.db.DictationEntity
 import com.bheeshamks.freeflow.core.data.db.HistoryDatabase
@@ -22,6 +25,7 @@ import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
 import com.bheeshamks.freeflow.ime.audio.KeyboardSoundPlayer
+import com.bheeshamks.freeflow.ime.clipboard.ClipItem
 import com.bheeshamks.freeflow.ime.clipboard.ClipboardHistoryManager
 import com.bheeshamks.freeflow.ime.clipboard.ClipboardView
 import com.bheeshamks.freeflow.ime.emoji.EmojiPickerView
@@ -32,9 +36,11 @@ import com.bheeshamks.freeflow.ime.model.KeyType
 import com.bheeshamks.freeflow.ime.model.KeyboardLayer
 import com.bheeshamks.freeflow.ime.model.KeyboardViewState
 import com.bheeshamks.freeflow.ime.model.ShiftState
+import com.bheeshamks.freeflow.ime.prediction.WordSuggestionEngine
 import com.bheeshamks.freeflow.ime.ui.KeyboardLayout
 import com.bheeshamks.freeflow.ime.ui.KeyboardScreen
 import com.bheeshamks.freeflow.ime.ui.SmartbarState
+import com.bheeshamks.freeflow.ime.ui.ToolsMenuView
 import com.bheeshamks.freeflow.ui.MainActivity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -52,6 +58,7 @@ class FreeFlowIMEService : InputMethodService() {
 
     companion object {
         private const val TAG = "FreeFlowIMEService"
+        val isImeVisible = MutableStateFlow(false)
     }
 
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -67,6 +74,7 @@ class FreeFlowIMEService : InputMethodService() {
 
     private val lifecycleHost = ImeLifecycleHost()
     private val keysCafeController = KeysCafeController()
+    private val suggestionEngine = WordSuggestionEngine()
 
     private val settingsStateFlow = MutableStateFlow(KeyboardSettings())
     private var shiftState by mutableStateOf(ShiftState.UNSHIFTED)
@@ -75,8 +83,7 @@ class FreeFlowIMEService : InputMethodService() {
     private var keyboardViewState by mutableStateOf(KeyboardViewState.KEYBOARD)
     private var isVoiceRecording by mutableStateOf(false)
     private var isVoiceTranscribing by mutableStateOf(false)
-
-    private val sampleSuggestions = listOf("The", "What", "How")
+    private var dynamicSuggestions by mutableStateOf(listOf("I", "The", "Thanks"))
     private var composeInputView: ComposeView? = null
     private var soundPlayer: KeyboardSoundPlayer? = null
 
@@ -164,14 +171,29 @@ class FreeFlowIMEService : InputMethodService() {
                                 stopKeyboardVoiceDictation()
                             },
                             onSuggestionClick = { word ->
-                                currentInputConnection?.commitText("$word ", 1)
+                                val ic = currentInputConnection
+                                if (ic != null) {
+                                    val textBefore = ic.getTextBeforeCursor(40, 0)?.toString() ?: ""
+                                    val prefix = suggestionEngine.extractCurrentPrefix(textBefore)
+                                    if (prefix.isNotEmpty()) {
+                                        ic.deleteSurroundingText(prefix.length, 0)
+                                    }
+                                    ic.commitText("$word ", 1)
+                                    suggestionEngine.learnWord(word)
+                                    updateDynamicSuggestions()
+                                }
                                 smartbarState = SmartbarState.TOOLBAR
                             },
                             onSettingsClick = {
                                 val intent = Intent(this@FreeFlowIMEService, MainActivity::class.java).apply {
-                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    putExtra("navigate_to", "settings")
+                                    putExtra("settings_tab", "keyboard")
                                 }
                                 startActivity(intent)
+                            },
+                            onToolsMenuClick = {
+                                keyboardViewState = KeyboardViewState.TOOLS_MENU
                             },
                             onEmojiClick = {
                                 keyboardViewState = KeyboardViewState.EMOJI_PICKER
@@ -190,8 +212,43 @@ class FreeFlowIMEService : InputMethodService() {
                             activeLayer = activeLayer,
                             shiftState = shiftState,
                             smartbarState = smartbarState,
-                            suggestions = sampleSuggestions,
+                            suggestions = dynamicSuggestions,
                             isSearchAction = isSearch
+                        )
+                    }
+                    KeyboardViewState.TOOLS_MENU -> {
+                        ToolsMenuView(
+                            settings = currentSettings,
+                            onOpenFreeFlow = {
+                                val intent = Intent(this@FreeFlowIMEService, MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                }
+                                startActivity(intent)
+                            },
+                            onBackToKeyboard = {
+                                keyboardViewState = KeyboardViewState.KEYBOARD
+                            },
+                            onEmojiClick = {
+                                keyboardViewState = KeyboardViewState.EMOJI_PICKER
+                            },
+                            onTranslateClick = {
+                                handleCaseToggle()
+                            },
+                            onClipboardClick = {
+                                clipboardHistoryManager.syncPrimaryClip(this@FreeFlowIMEService)
+                                keyboardViewState = KeyboardViewState.CLIPBOARD
+                            },
+                            onSettingsClick = {
+                                val intent = Intent(this@FreeFlowIMEService, MainActivity::class.java).apply {
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP
+                                    putExtra("navigate_to", "settings")
+                                    putExtra("settings_tab", "keyboard")
+                                }
+                                startActivity(intent)
+                            },
+                            onHideKeyboard = {
+                                requestHideSelf(0)
+                            }
                         )
                     }
                     KeyboardViewState.EMOJI_PICKER -> {
@@ -231,8 +288,37 @@ class FreeFlowIMEService : InputMethodService() {
                         ClipboardView(
                             settings = currentSettings,
                             clips = clips,
-                            onPasteClip = { clipText ->
-                                currentInputConnection?.commitText(clipText, 1)
+                            onPasteClip = { clipItem ->
+                                val ic = currentInputConnection
+                                if (ic != null) {
+                                    if (clipItem.isImage && !clipItem.uriString.isNullOrEmpty()) {
+                                        try {
+                                            val uri = if (clipItem.uriString.startsWith("/")) {
+                                                val file = java.io.File(clipItem.uriString)
+                                                androidx.core.content.FileProvider.getUriForFile(this@FreeFlowIMEService, "${packageName}.fileprovider", file)
+                                            } else {
+                                                val parsed = Uri.parse(clipItem.uriString)
+                                                if (parsed.scheme == "file") {
+                                                    val file = java.io.File(parsed.path ?: "")
+                                                    androidx.core.content.FileProvider.getUriForFile(this@FreeFlowIMEService, "${packageName}.fileprovider", file)
+                                                } else {
+                                                    parsed
+                                                }
+                                            }
+                                            val description = android.content.ClipDescription("Clipboard Image", arrayOf("image/png", "image/jpeg"))
+                                            val contentInfo = InputContentInfoCompat(uri, description, null)
+                                            val flags = InputConnectionCompat.INPUT_CONTENT_GRANT_READ_URI_PERMISSION
+                                            val committed = InputConnectionCompat.commitContent(ic, currentInputEditorInfo ?: EditorInfo(), contentInfo, flags, null)
+                                            if (!committed) {
+                                                ic.commitText(clipItem.text, 1)
+                                            }
+                                        } catch (e: Exception) {
+                                            ic.commitText(clipItem.text, 1)
+                                        }
+                                    } else {
+                                        ic.commitText(clipItem.text, 1)
+                                    }
+                                }
                             },
                             onClearAll = {
                                 clipboardHistoryManager.clearAll()
@@ -252,16 +338,19 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        isImeVisible.value = true
         lifecycleHost.onResume()
         shiftState = ShiftState.UNSHIFTED
         activeLayer = KeyboardLayer.ALPHA
         smartbarState = SmartbarState.TOOLBAR
         keyboardViewState = KeyboardViewState.KEYBOARD
         clipboardHistoryManager.syncPrimaryClip(this)
+        updateDynamicSuggestions()
     }
 
     override fun onFinishInputView(finishingInput: Boolean) {
         super.onFinishInputView(finishingInput)
+        isImeVisible.value = false
         lifecycleHost.onPause()
         if (isVoiceRecording) {
             audioCaptureManager.cancelRecording()
@@ -271,16 +360,42 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
+        isImeVisible.value = true
         lifecycleHost.onResume()
         clipboardHistoryManager.syncPrimaryClip(this)
+        updateDynamicSuggestions()
     }
 
     override fun onWindowHidden() {
         super.onWindowHidden()
+        isImeVisible.value = false
         lifecycleHost.onPause()
         if (isVoiceRecording) {
             audioCaptureManager.cancelRecording()
             isVoiceRecording = false
+        }
+    }
+
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+        updateDynamicSuggestions()
+    }
+
+    private fun updateDynamicSuggestions() {
+        val ic = currentInputConnection
+        val textBefore = ic?.getTextBeforeCursor(40, 0)?.toString() ?: ""
+        val prefix = suggestionEngine.extractCurrentPrefix(textBefore)
+        val list = suggestionEngine.getSuggestions(textBefore)
+        dynamicSuggestions = list
+        if (prefix.isNotEmpty()) {
+            smartbarState = SmartbarState.SUGGESTIONS
         }
     }
 
@@ -299,17 +414,20 @@ class FreeFlowIMEService : InputMethodService() {
                 if (shiftState == ShiftState.SHIFTED) {
                     shiftState = ShiftState.UNSHIFTED
                 }
-                smartbarState = SmartbarState.SUGGESTIONS
+                updateDynamicSuggestions()
             }
             KeyType.SPACE -> {
                 ic.commitText(" ", 1)
+                updateDynamicSuggestions()
                 smartbarState = SmartbarState.TOOLBAR
             }
             KeyType.PERIOD -> {
                 ic.commitText(".", 1)
+                updateDynamicSuggestions()
             }
             KeyType.BACKSPACE -> {
                 ic.deleteSurroundingText(1, 0)
+                updateDynamicSuggestions()
             }
             KeyType.EMOJI -> {
                 keyboardViewState = KeyboardViewState.EMOJI_PICKER
@@ -326,6 +444,7 @@ class FreeFlowIMEService : InputMethodService() {
             }
             else -> {
                 ic.commitText(key.primaryText, 1)
+                updateDynamicSuggestions()
             }
         }
     }

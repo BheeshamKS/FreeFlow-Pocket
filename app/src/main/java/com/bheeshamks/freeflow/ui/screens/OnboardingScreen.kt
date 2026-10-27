@@ -66,6 +66,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
@@ -73,6 +74,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import com.bheeshamks.freeflow.R
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
 import com.bheeshamks.freeflow.service.FreeFlowAccessibilityService
@@ -251,22 +253,22 @@ private fun Step1Welcome(onNext: () -> Unit) {
         // Hero Icon
         Box(
             modifier = Modifier
-                .size(100.dp)
+                .size(108.dp)
                 .shadow(elevation = 20.dp, shape = CircleShape)
                 .clip(CircleShape)
                 .background(
                     brush = Brush.verticalGradient(
-                        colors = listOf(Color(0xFF5AB4FF), Color(0xFF0058B8))
+                        colors = listOf(Color(0xFF1E2638), Color(0xFF12141C))
                     )
                 )
-                .border(2.dp, Color(0x66FFFFFF), CircleShape),
+                .border(2.dp, Color(0x6632FFE4), CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Mic,
+                painter = painterResource(id = R.drawable.ic_freeflow_logo),
                 contentDescription = "FreeFlow",
-                tint = Color.White,
-                modifier = Modifier.size(50.dp)
+                tint = Color.Unspecified,
+                modifier = Modifier.size(56.dp)
             )
         }
 

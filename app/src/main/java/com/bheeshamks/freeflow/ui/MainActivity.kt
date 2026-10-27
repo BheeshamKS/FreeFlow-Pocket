@@ -1,5 +1,6 @@
 package com.bheeshamks.freeflow.ui
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -17,9 +18,13 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
@@ -28,7 +33,9 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.lifecycleScope
 import com.bheeshamks.freeflow.core.audio.AudioCaptureManager
+import com.bheeshamks.freeflow.ui.screens.SettingsSubTab
 import com.bheeshamks.freeflow.core.data.db.HistoryDatabase
 import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
@@ -60,6 +67,8 @@ class MainActivity : ComponentActivity() {
     private lateinit var groqClient: GroqWhisperClient
     private lateinit var historyDb: HistoryDatabase
     private lateinit var audioCaptureManager: AudioCaptureManager
+    private var targetNavigationRoute by mutableStateOf<String?>(null)
+    private var targetSettingsTab by mutableStateOf<SettingsSubTab?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
@@ -71,17 +80,30 @@ class MainActivity : ComponentActivity() {
         historyDb = HistoryDatabase.getInstance(this)
         audioCaptureManager = AudioCaptureManager()
 
+        if (intent?.getStringExtra("navigate_to") == "settings") {
+            targetNavigationRoute = Screen.Settings.route
+            targetSettingsTab = if (intent?.getStringExtra("settings_tab") == "voice") {
+                SettingsSubTab.VOICE_API
+            } else {
+                SettingsSubTab.KEYBOARD
+            }
+            lifecycleScope.launch {
+                preferences.setOnboardingCompleted(true)
+            }
+        }
+
         setContent {
             FreeFlowTheme {
                 val scope = rememberCoroutineScope()
                 val settings by preferences.settingsFlow.collectAsState(initial = KeyboardSettings())
+                val isOnboardingDone = settings.isOnboardingCompleted || targetNavigationRoute != null
 
                 AnimatedContent(
-                    targetState = settings.isOnboardingCompleted,
+                    targetState = isOnboardingDone,
                     transitionSpec = { fadeIn() togetherWith fadeOut() },
                     label = "OnboardingMainTransition"
-                ) { isOnboardingDone ->
-                    if (!isOnboardingDone) {
+                ) { isDone ->
+                    if (!isDone) {
                         OnboardingScreen(
                             apiKeyStore = apiKeyStore,
                             groqClient = groqClient,
@@ -92,9 +114,26 @@ class MainActivity : ComponentActivity() {
                             }
                         )
                     } else {
+                        val initialRoute = remember { targetNavigationRoute ?: Screen.Home.route }
                         val navController = rememberNavController()
                         val navBackStackEntry by navController.currentBackStackEntryAsState()
                         val currentRoute = navBackStackEntry?.destination?.route
+
+                        LaunchedEffect(targetNavigationRoute) {
+                            targetNavigationRoute?.let { route ->
+                                if (currentRoute != null && currentRoute != route) {
+                                    try {
+                                        navController.navigate(route) {
+                                            popUpTo(navController.graph.findStartDestination().id) {
+                                                saveState = true
+                                            }
+                                            launchSingleTop = true
+                                            restoreState = true
+                                        }
+                                    } catch (_: Exception) {}
+                                }
+                            }
+                        }
 
                         Scaffold(
                             modifier = Modifier
@@ -172,6 +211,8 @@ class MainActivity : ComponentActivity() {
                                         apiKeyStore = apiKeyStore,
                                         preferences = preferences,
                                         groqClient = groqClient,
+                                        initialSubTab = targetSettingsTab,
+                                        onSubTabChanged = { targetSettingsTab = null },
                                         onReplayOnboarding = {
                                             scope.launch {
                                                 preferences.setOnboardingCompleted(false)
@@ -183,6 +224,22 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getStringExtra("navigate_to") == "settings") {
+            targetNavigationRoute = Screen.Settings.route
+            targetSettingsTab = if (intent.getStringExtra("settings_tab") == "voice") {
+                SettingsSubTab.VOICE_API
+            } else {
+                SettingsSubTab.KEYBOARD
+            }
+            lifecycleScope.launch {
+                preferences.setOnboardingCompleted(true)
             }
         }
     }
