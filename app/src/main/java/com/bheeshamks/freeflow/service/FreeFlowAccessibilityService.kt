@@ -58,6 +58,10 @@ class FreeFlowAccessibilityService : AccessibilityService() {
     private var isBubbleEnabled: Boolean = true
     private var hideOnKeyboard: Boolean = true
 
+    private val isBusyWithVoice: Boolean
+        get() = audioCaptureManager.isRecording.value ||
+                (overlayManager?.hudState?.value ?: OverlayHudState.IDLE) != OverlayHudState.IDLE
+
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "Initializing FreeFlowAccessibilityService...")
@@ -79,26 +83,21 @@ class FreeFlowAccessibilityService : AccessibilityService() {
             preferences = preferences
         )
 
-        // Observe preferences and active keyboard visibility
+        // Observe preferences
         serviceScope.launch {
-            combine(
-                preferences.settingsFlow,
-                FreeFlowIMEService.isImeVisible
-            ) { settings, imeVisible ->
-                Pair(settings, imeVisible)
-            }.collectLatest { (settings, imeVisible) ->
+            preferences.settingsFlow.collectLatest { settings ->
                 excludedPackages = settings.excludedPackages
                 isBubbleEnabled = settings.isFloatingBubbleEnabled
-                hideOnKeyboard = settings.hideBubbleOnKeyboard
-
-                val isEditableFocused = currentFocusedNode?.let { isNodeEditable(it) } ?: false
 
                 if (!isBubbleEnabled || !android.provider.Settings.canDrawOverlays(this@FreeFlowAccessibilityService)) {
                     overlayManager?.hide()
-                } else if (hideOnKeyboard && (imeVisible || isEditableFocused)) {
-                    overlayManager?.hide()
                 } else {
-                    overlayManager?.show()
+                    val isEditable = currentFocusedNode?.let { isNodeEditable(it) } ?: false
+                    if (isEditable) {
+                        overlayManager?.show()
+                    } else if (!isBusyWithVoice) {
+                        overlayManager?.hide()
+                    }
                 }
             }
         }
@@ -107,8 +106,12 @@ class FreeFlowAccessibilityService : AccessibilityService() {
     override fun onServiceConnected() {
         super.onServiceConnected()
         Log.i(TAG, "FreeFlowAccessibilityService connected successfully.")
-        if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this)) {
-            overlayManager?.show()
+        val rootNode = rootInActiveWindow
+        val focused = rootNode?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+        if (focused != null && isNodeEditable(focused)) {
+            handleNodeFocused(focused)
+        } else {
+            overlayManager?.hide()
         }
     }
 
@@ -130,22 +133,17 @@ class FreeFlowAccessibilityService : AccessibilityService() {
                 // Check if the current window/app is in excluded packages
                 if (packageName != null && excludedPackages.contains(packageName)) {
                     Log.d(TAG, "Excluded package active: $packageName. Suppressing overlay.")
-                    overlayManager?.hide()
+                    if (!isBusyWithVoice) overlayManager?.hide()
                     return
                 }
 
                 val rootNode = rootInActiveWindow
-                if (rootNode != null) {
-                    val focused = rootNode.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
-                    if (focused != null) {
-                        handleNodeFocused(focused)
-                        return
-                    }
-                }
-
-                // Keep overlay steadily visible if floating bubble is enabled and permission granted
-                if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this)) {
-                    overlayManager?.show()
+                val focused = rootNode?.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
+                if (focused != null && isNodeEditable(focused)) {
+                    handleNodeFocused(focused)
+                } else if (!isBusyWithVoice) {
+                    currentFocusedNode = null
+                    overlayManager?.hide()
                 }
             }
         }
@@ -157,7 +155,7 @@ class FreeFlowAccessibilityService : AccessibilityService() {
         // 1. Automatic Password and Banking App Bypass
         if (node.isPassword) {
             Log.d(TAG, "Password field detected. Suppressing floating HUD.")
-            overlayManager?.hide()
+            if (!isBusyWithVoice) overlayManager?.hide()
             return
         }
 
@@ -165,20 +163,29 @@ class FreeFlowAccessibilityService : AccessibilityService() {
         val pkg = currentPackageName ?: node.packageName?.toString()
         if (pkg != null && excludedPackages.contains(pkg)) {
             Log.d(TAG, "Excluded app focused ($pkg). Suppressing floating HUD.")
-            overlayManager?.hide()
+            if (!isBusyWithVoice) overlayManager?.hide()
             return
         }
 
-        // Suppress floating HUD when textbox is selected if hideOnKeyboard is enabled
-        if (hideOnKeyboard && (isNodeEditable(node) || FreeFlowIMEService.isImeVisible.value)) {
-            Log.d(TAG, "Textbox focused or IME active. Suppressing floating HUD.")
-            overlayManager?.hide()
+        val isEditable = isNodeEditable(node)
+
+        // Don't interrupt if currently recording or transcribing
+        if (isBusyWithVoice) {
             return
         }
 
-        // Keep overlay active for user dictation
         if (isBubbleEnabled && android.provider.Settings.canDrawOverlays(this)) {
-            overlayManager?.show()
+            if (isEditable) {
+                // Text box is shown / focused -> SHOW the floating bubble!
+                Log.d(TAG, "Editable textbox focused. Showing floating HUD.")
+                overlayManager?.show()
+            } else {
+                // Non-editable view -> HIDE the floating bubble!
+                Log.d(TAG, "Non-editable view focused. Hiding floating HUD.")
+                overlayManager?.hide()
+            }
+        } else {
+            overlayManager?.hide()
         }
     }
 

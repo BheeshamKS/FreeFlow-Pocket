@@ -46,9 +46,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bheeshamks.freeflow.R
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -151,10 +153,10 @@ fun FloatingWaveformHUD(
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Mic,
+                        painter = painterResource(id = R.drawable.ic_freeflow_logo),
                         contentDescription = "Tap to Dictate",
-                        tint = Color(0xFF5AB4FF),
-                        modifier = Modifier.size(24.dp)
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
