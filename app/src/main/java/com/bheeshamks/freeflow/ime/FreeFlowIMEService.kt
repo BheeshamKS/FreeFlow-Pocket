@@ -120,6 +120,14 @@ class FreeFlowIMEService : InputMethodService() {
         outInsets.touchableRegion.set(loc[0], loc[1], loc[0] + view.width, loc[1] + view.height)
     }
 
+    override fun onConfigureWindow(win: android.view.Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
+        super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            win.isNavigationBarContrastEnforced = false
+        }
+        win.navigationBarColor = android.graphics.Color.TRANSPARENT
+    }
+
     override fun onCreateInputView(): View {
         lifecycleHost.onStart()
         lifecycleHost.onResume()

@@ -72,6 +72,7 @@ fun Keycap(
     onCursorDrag: (Float) -> Unit = {},
     soundPlayer: KeyboardSoundPlayer? = null,
     onKeyPreviewChange: (KeyPreviewInfo?) -> Unit = {},
+    onSwipeDown: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -157,8 +158,10 @@ fun Keycap(
                             durationMs = settings.animationSpeedMs
                         )
 
-                        var hasDragged = false
+                        var hasDraggedX = false
+                        var hasSwipedDown = false
                         var accumulatedX = 0f
+                        var accumulatedY = 0f
                         val touchSlop = viewConfiguration.touchSlop
 
                         while (true) {
@@ -170,24 +173,33 @@ fun Keycap(
 
                             val posChange = pointerChange.positionChange()
                             accumulatedX += posChange.x
+                            accumulatedY += posChange.y
 
-                            if (!hasDragged && kotlin.math.abs(accumulatedX) > touchSlop) {
-                                hasDragged = true
+                            if (!hasDraggedX && !hasSwipedDown) {
+                                if (accumulatedY > touchSlop * 1.5f && accumulatedY > kotlin.math.abs(accumulatedX) * 1.2f) {
+                                    hasSwipedDown = true
+                                    pointerChange.consume()
+                                    break
+                                } else if (kotlin.math.abs(accumulatedX) > touchSlop) {
+                                    hasDraggedX = true
+                                }
                             }
 
-                            if (hasDragged) {
+                            if (hasDraggedX) {
                                 pointerChange.consume()
                                 onCursorDrag(posChange.x)
                             }
                         }
 
                         isPressed = false
-                        if (!hasDragged) {
+                        if (hasSwipedDown) {
+                            onSwipeDown()
+                        } else if (!hasDraggedX) {
                             onKeyPress(key)
                         }
                     }
                 } else if (key.keyType == KeyType.BACKSPACE) {
-                    // Backspace with responsive tap & accelerated repeat
+                    // Backspace with responsive tap, repeat, and swipe-down detection
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         isPressed = true
@@ -199,12 +211,16 @@ fun Keycap(
                             maxRadiusPx = settings.bloomRadiusDp * 2.5f,
                             durationMs = settings.animationSpeedMs
                         )
-                        onKeyPress(key)
+
+                        var hasSwipedDown = false
+                        var accumulatedX = 0f
+                        var accumulatedY = 0f
+                        val touchSlop = viewConfiguration.touchSlop
 
                         val repeatJob: Job = scope.launch {
                             delay(350) // Initial hold delay
                             var repeatInterval = 90L
-                            while (isActive && isPressed) {
+                            while (isActive && isPressed && !hasSwipedDown) {
                                 playFeedback()
                                 onKeyPress(key)
                                 delay(repeatInterval)
@@ -214,12 +230,34 @@ fun Keycap(
                             }
                         }
 
-                        waitForUpOrCancellation()
+                        onKeyPress(key)
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                            if (pointerChange == null || !pointerChange.pressed) {
+                                break
+                            }
+
+                            val posChange = pointerChange.positionChange()
+                            accumulatedX += posChange.x
+                            accumulatedY += posChange.y
+
+                            if (accumulatedY > touchSlop * 1.5f && accumulatedY > kotlin.math.abs(accumulatedX) * 1.2f) {
+                                hasSwipedDown = true
+                                pointerChange.consume()
+                                break
+                            }
+                        }
+
                         repeatJob.cancel()
                         isPressed = false
+                        if (hasSwipedDown) {
+                            onSwipeDown()
+                        }
                     }
                 } else {
-                    // Character, Symbol, and Action Keys: Zero-latency touch response
+                    // Character, Symbol, and Action Keys: Immediate bloom & feedback, swipe-down cancel
                     awaitEachGesture {
                         val down = awaitFirstDown(requireUnconsumed = false)
                         isPressed = true
@@ -241,11 +279,38 @@ fun Keycap(
                             maxRadiusPx = settings.bloomRadiusDp * 2.5f,
                             durationMs = settings.animationSpeedMs
                         )
-                        onKeyPress(key)
 
-                        waitForUpOrCancellation()
+                        var hasSwipedDown = false
+                        var accumulatedX = 0f
+                        var accumulatedY = 0f
+                        val touchSlop = viewConfiguration.touchSlop
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                            if (pointerChange == null || !pointerChange.pressed) {
+                                break
+                            }
+
+                            val posChange = pointerChange.positionChange()
+                            accumulatedX += posChange.x
+                            accumulatedY += posChange.y
+
+                            if (accumulatedY > touchSlop * 1.5f && accumulatedY > kotlin.math.abs(accumulatedX) * 1.2f) {
+                                hasSwipedDown = true
+                                pointerChange.consume()
+                                break
+                            }
+                        }
+
                         isPressed = false
                         onKeyPreviewChange(null)
+
+                        if (hasSwipedDown) {
+                            onSwipeDown()
+                        } else {
+                            onKeyPress(key)
+                        }
                     }
                 }
             },

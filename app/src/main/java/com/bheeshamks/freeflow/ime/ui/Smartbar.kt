@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
@@ -28,6 +30,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -58,6 +62,7 @@ fun Smartbar(
     onSettingsClick: () -> Unit,
     onMicClick: () -> Unit,
     isMicActive: Boolean,
+    onSwipeDown: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     Row(
@@ -65,7 +70,33 @@ fun Smartbar(
             .fillMaxWidth()
             .height(50.dp)
             .background(Color(0xFF16161A))
-            .padding(horizontal = 8.dp),
+            .padding(horizontal = 8.dp)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var accumulatedY = 0f
+                    var accumulatedX = 0f
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                        if (pointerChange == null || !pointerChange.pressed) {
+                            break
+                        }
+
+                        val posChange = pointerChange.positionChange()
+                        accumulatedX += posChange.x
+                        accumulatedY += posChange.y
+
+                        if (accumulatedY > touchSlop * 1.5f && accumulatedY > kotlin.math.abs(accumulatedX) * 1.2f) {
+                            pointerChange.consume()
+                            onSwipeDown()
+                            break
+                        }
+                    }
+                }
+            },
         verticalAlignment = Alignment.CenterVertically
     ) {
         AnimatedContent(

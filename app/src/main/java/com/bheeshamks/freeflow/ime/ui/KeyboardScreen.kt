@@ -6,6 +6,8 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,8 +21,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.wrapContentHeight
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -35,6 +35,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
@@ -96,7 +98,6 @@ fun KeyboardScreen(
             .fillMaxWidth()
             .wrapContentHeight()
             .background(Color(settings.keyboardTheme.bgHex))
-            .navigationBarsPadding()
             .onGloballyPositioned { keyboardRootOffset = it.positionInRoot() }
     ) {
         // Background Bloom Canvas matched strictly to keyboard bounds
@@ -111,7 +112,34 @@ fun KeyboardScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .wrapContentHeight()
-                .padding(bottom = 2.dp),
+                .navigationBarsPadding()
+                .padding(bottom = 6.dp)
+                .pointerInput(Unit) {
+                    awaitEachGesture {
+                        val down = awaitFirstDown(requireUnconsumed = false)
+                        var accumulatedY = 0f
+                        var accumulatedX = 0f
+                        val touchSlop = viewConfiguration.touchSlop
+
+                        while (true) {
+                            val event = awaitPointerEvent()
+                            val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                            if (pointerChange == null || !pointerChange.pressed) {
+                                break
+                            }
+
+                            val posChange = pointerChange.positionChange()
+                            accumulatedX += posChange.x
+                            accumulatedY += posChange.y
+
+                            if (accumulatedY > touchSlop * 1.5f && accumulatedY > kotlin.math.abs(accumulatedX) * 1.2f) {
+                                pointerChange.consume()
+                                onHideKeyboard()
+                                break
+                            }
+                        }
+                    }
+                },
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             // Top Smartbar
@@ -126,7 +154,8 @@ fun KeyboardScreen(
                 onClipboardClick = onClipboardClick,
                 onSettingsClick = onSettingsClick,
                 onMicClick = onMicClick,
-                isMicActive = isVoiceRecording || isVoiceTranscribing
+                isMicActive = isVoiceRecording || isVoiceTranscribing,
+                onSwipeDown = onHideKeyboard
             )
 
             Spacer(modifier = Modifier.height(2.dp))
@@ -146,6 +175,7 @@ fun KeyboardScreen(
                         cornerRadius = cornerRadius,
                         soundPlayer = soundPlayer,
                         onKeyPreviewChange = { activeKeyPreview = it },
+                        onSwipeDown = onHideKeyboard,
                         onKeyPress = onKeyPress
                     )
                 }
@@ -160,6 +190,7 @@ fun KeyboardScreen(
                     cornerRadius = cornerRadius,
                     soundPlayer = soundPlayer,
                     onKeyPreviewChange = { activeKeyPreview = it },
+                    onSwipeDown = onHideKeyboard,
                     onKeyPress = onKeyPress
                 )
 
@@ -182,6 +213,7 @@ fun KeyboardScreen(
                             cornerRadius = cornerRadius,
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
+                            onSwipeDown = onHideKeyboard,
                             onKeyPress = onKeyPress,
                             modifier = Modifier.weight(key.weight)
                         )
@@ -208,6 +240,7 @@ fun KeyboardScreen(
                             cornerRadius = cornerRadius,
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
+                            onSwipeDown = onHideKeyboard,
                             onKeyPress = { k ->
                                 if (k.keyType == KeyType.SHIFT) {
                                     val now = System.currentTimeMillis()
@@ -242,6 +275,7 @@ fun KeyboardScreen(
                             cornerRadius = cornerRadius,
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
+                            onSwipeDown = onHideKeyboard,
                             onKeyPress = { k ->
                                 when (k.keyType) {
                                     KeyType.SYMBOLS_TOGGLE -> onSymbolsToggle()
@@ -256,8 +290,8 @@ fun KeyboardScreen(
                 }
             } else {
                 // Symbols Layer
-                KeyRow(KeyboardLayout.getSymbolsRow1(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onKeyPress)
-                KeyRow(KeyboardLayout.getSymbolsRow2(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onKeyPress)
+                KeyRow(KeyboardLayout.getSymbolsRow1(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onHideKeyboard, onKeyPress)
+                KeyRow(KeyboardLayout.getSymbolsRow2(), shiftState, keysCafeController, settings, keyHeight, cornerRadius, soundPlayer, { activeKeyPreview = it }, onHideKeyboard, onKeyPress)
 
                 // Symbols Row 3 (with 0.5f spacers on each side)
                 Row(
@@ -278,6 +312,7 @@ fun KeyboardScreen(
                             cornerRadius = cornerRadius,
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
+                            onSwipeDown = onHideKeyboard,
                             onKeyPress = onKeyPress,
                             modifier = Modifier.weight(key.weight)
                         )
@@ -303,6 +338,7 @@ fun KeyboardScreen(
                             cornerRadius = cornerRadius,
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
+                            onSwipeDown = onHideKeyboard,
                             onKeyPress = { k ->
                                 if (k.keyType == KeyType.SYMBOLS_TOGGLE) {
                                     onSymbolsToggle()
@@ -333,6 +369,7 @@ fun KeyboardScreen(
                             cornerRadius = cornerRadius,
                             soundPlayer = soundPlayer,
                             onKeyPreviewChange = { activeKeyPreview = it },
+                            onSwipeDown = onHideKeyboard,
                             onKeyPress = { k ->
                                 when (k.keyType) {
                                     KeyType.SYMBOLS_TOGGLE -> onSymbolsToggle()
@@ -344,30 +381,6 @@ fun KeyboardScreen(
                             modifier = Modifier.weight(key.weight)
                         )
                     }
-                }
-            }
-
-            // Bottom bar with Down Chevron to hide keyboard (clean & uncluttered matching Screenshot 1)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(34.dp)
-                    .padding(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(30.dp)
-                        .clickable { onHideKeyboard() },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.KeyboardArrowDown,
-                        contentDescription = "Hide Keyboard",
-                        tint = Color(0xFF888894),
-                        modifier = Modifier.size(24.dp)
-                    )
                 }
             }
         }
@@ -449,6 +462,7 @@ private fun KeyRow(
     cornerRadius: androidx.compose.ui.unit.Dp,
     soundPlayer: KeyboardSoundPlayer? = null,
     onKeyPreviewChange: (KeyPreviewInfo?) -> Unit = {},
+    onSwipeDown: () -> Unit = {},
     onKeyPress: (KeyModel) -> Unit
 ) {
     Row(
@@ -468,6 +482,7 @@ private fun KeyRow(
                 cornerRadius = cornerRadius,
                 soundPlayer = soundPlayer,
                 onKeyPreviewChange = onKeyPreviewChange,
+                onSwipeDown = onSwipeDown,
                 onKeyPress = onKeyPress,
                 modifier = Modifier.weight(key.weight)
             )

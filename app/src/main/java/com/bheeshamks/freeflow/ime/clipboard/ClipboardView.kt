@@ -10,6 +10,8 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,7 +33,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Image
-import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -46,6 +47,8 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
@@ -99,6 +102,34 @@ fun ClipboardView(
             .wrapContentHeight()
             .background(Color(settings.keyboardTheme.bgHex))
             .navigationBarsPadding()
+            .padding(bottom = 6.dp)
+            .pointerInput(Unit) {
+                awaitEachGesture {
+                    val down = awaitFirstDown(requireUnconsumed = false)
+                    var accumulatedY = 0f
+                    var accumulatedX = 0f
+                    val touchSlop = viewConfiguration.touchSlop
+
+                    while (true) {
+                        val event = awaitPointerEvent()
+                        val pointerChange = event.changes.firstOrNull { it.id == down.id }
+                        if (pointerChange == null || !pointerChange.pressed) {
+                            break
+                        }
+
+                        val posChange = pointerChange.positionChange()
+                        accumulatedX += posChange.x
+                        accumulatedY += posChange.y
+
+                        if (accumulatedY > touchSlop * 1.5f && accumulatedY > kotlin.math.abs(accumulatedX) * 1.2f) {
+                            pointerChange.consume()
+                            playFeedback()
+                            onBackToKeyboard()
+                            break
+                        }
+                    }
+                }
+            }
     ) {
         // Top Header: Keyboard Button | Clipboard title ... [Pin] [Trash]
         Row(
@@ -230,30 +261,7 @@ fun ClipboardView(
             }
         }
 
-        // Bottom chin with Down Chevron to hide keyboard
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(34.dp)
-                .background(Color(0xFF0C0C0F))
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(30.dp)
-                    .clickable { onHideKeyboard() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = Icons.Default.KeyboardArrowDown,
-                    contentDescription = "Hide Keyboard",
-                    tint = Color(0xFF888894),
-                    modifier = Modifier.size(24.dp)
-                )
-            }
-        }
+        Spacer(modifier = Modifier.height(10.dp))
     }
 }
 
