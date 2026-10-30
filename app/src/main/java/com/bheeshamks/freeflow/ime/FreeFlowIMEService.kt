@@ -9,7 +9,9 @@ import android.os.Vibrator
 import android.util.Log
 import android.view.KeyEvent
 import android.view.View
+import android.view.WindowInsetsController
 import android.view.inputmethod.EditorInfo
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -21,6 +23,7 @@ import com.bheeshamks.freeflow.core.audio.AudioCaptureManager
 import com.bheeshamks.freeflow.core.data.db.DictationEntity
 import com.bheeshamks.freeflow.core.data.db.HistoryDatabase
 import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
+import com.bheeshamks.freeflow.core.data.model.KeyboardTheme
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
@@ -120,12 +123,37 @@ class FreeFlowIMEService : InputMethodService() {
         outInsets.touchableRegion.set(loc[0], loc[1], loc[0] + view.width, loc[1] + view.height)
     }
 
+    private fun applyNavigationBarTheme(
+        targetWindow: android.view.Window? = window?.window,
+        theme: KeyboardTheme = settingsStateFlow.value.keyboardTheme
+    ) {
+        val navColor = theme.bgHex.toInt()
+        targetWindow?.let { win ->
+            win.navigationBarColor = navColor
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                win.navigationBarDividerColor = navColor
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                win.isNavigationBarContrastEnforced = false
+            }
+            win.decorView.setBackgroundColor(navColor)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                win.insetsController?.setSystemBarsAppearance(
+                    0,
+                    WindowInsetsController.APPEARANCE_LIGHT_NAVIGATION_BARS
+                )
+            } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                @Suppress("DEPRECATION")
+                win.decorView.systemUiVisibility = win.decorView.systemUiVisibility and
+                        View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR.inv()
+            }
+        }
+        composeInputView?.setBackgroundColor(navColor)
+    }
+
     override fun onConfigureWindow(win: android.view.Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
         super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            win.isNavigationBarContrastEnforced = false
-        }
-        win.navigationBarColor = android.graphics.Color.TRANSPARENT
+        applyNavigationBarTheme(win)
     }
 
     override fun onCreateInputView(): View {
@@ -143,6 +171,9 @@ class FreeFlowIMEService : InputMethodService() {
 
             setContent {
                 val currentSettings by settingsStateFlow.collectAsState()
+                LaunchedEffect(currentSettings.keyboardTheme) {
+                    applyNavigationBarTheme(theme = currentSettings.keyboardTheme)
+                }
                 val clips by clipboardHistoryManager.clipsFlow.collectAsState()
                 val imeAction = currentInputEditorInfo?.imeOptions?.and(EditorInfo.IME_MASK_ACTION)
                 val isSearch = imeAction == EditorInfo.IME_ACTION_SEARCH
@@ -346,6 +377,7 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+        applyNavigationBarTheme()
         isImeVisible.value = true
         lifecycleHost.onResume()
         shiftState = ShiftState.UNSHIFTED
@@ -368,6 +400,7 @@ class FreeFlowIMEService : InputMethodService() {
 
     override fun onWindowShown() {
         super.onWindowShown()
+        applyNavigationBarTheme()
         isImeVisible.value = true
         lifecycleHost.onResume()
         clipboardHistoryManager.syncPrimaryClip(this)

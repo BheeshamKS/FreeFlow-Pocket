@@ -49,6 +49,8 @@ class ThemeAndGoodiesPreferences(private val context: Context) {
         private val KEY_FLOATING_BUBBLE_ENABLED = booleanPreferencesKey("floating_bubble_enabled")
         private val KEY_FLOATING_BUBBLE_OPACITY = floatPreferencesKey("floating_bubble_opacity")
         private val KEY_HIDE_BUBBLE_ON_KEYBOARD = booleanPreferencesKey("hide_bubble_on_keyboard")
+        private val KEY_FLOATING_BUBBLE_DOCKED_RIGHT = booleanPreferencesKey("floating_bubble_docked_right")
+        private val KEY_FLOATING_BUBBLE_Y_RATIO = floatPreferencesKey("floating_bubble_y_ratio")
         private val KEY_GROQ_MODEL = stringPreferencesKey("groq_model")
     }
 
@@ -82,6 +84,8 @@ class ThemeAndGoodiesPreferences(private val context: Context) {
             isFloatingBubbleEnabled = prefs[KEY_FLOATING_BUBBLE_ENABLED] ?: true,
             floatingBubbleOpacity = prefs[KEY_FLOATING_BUBBLE_OPACITY] ?: 0.5f,
             hideBubbleOnKeyboard = prefs[KEY_HIDE_BUBBLE_ON_KEYBOARD] ?: true,
+            floatingBubbleDockedOnRight = prefs[KEY_FLOATING_BUBBLE_DOCKED_RIGHT] ?: true,
+            floatingBubbleYRatio = prefs[KEY_FLOATING_BUBBLE_Y_RATIO] ?: 0.45f,
             groqModel = prefs[KEY_GROQ_MODEL] ?: "whisper-large-v3"
         )
     }
@@ -148,6 +152,13 @@ class ThemeAndGoodiesPreferences(private val context: Context) {
 
     suspend fun setHideBubbleOnKeyboard(hide: Boolean) {
         context.dataStore.edit { it[KEY_HIDE_BUBBLE_ON_KEYBOARD] = hide }
+    }
+
+    suspend fun setFloatingBubblePosition(dockedOnRight: Boolean, yRatio: Float) {
+        context.dataStore.edit {
+            it[KEY_FLOATING_BUBBLE_DOCKED_RIGHT] = dockedOnRight
+            it[KEY_FLOATING_BUBBLE_Y_RATIO] = yRatio.coerceIn(0.05f, 0.95f)
+        }
     }
 
     suspend fun updateGroqModel(model: String) {

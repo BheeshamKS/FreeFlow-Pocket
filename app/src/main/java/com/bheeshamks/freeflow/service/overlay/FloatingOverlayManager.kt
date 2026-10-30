@@ -24,8 +24,14 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.ui.MainActivity
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 /**
  * Manages the floating WindowManager overlay capsule backed by a Jetpack ComposeView.
@@ -67,9 +73,23 @@ class FloatingOverlayManager(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage
 
+    private var savedDockedOnRight: Boolean = true
+    private var savedYRatio: Float = 0.45f
+    private val managerScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     init {
         savedStateRegistryController.performRestore(null)
         lifecycleRegistry.currentState = Lifecycle.State.CREATED
+
+        preferences?.let { prefs ->
+            managerScope.launch {
+                prefs.settingsFlow.collectLatest { s ->
+                    savedDockedOnRight = s.floatingBubbleDockedOnRight
+                    savedYRatio = s.floatingBubbleYRatio
+                    _isDockedOnRight.value = s.floatingBubbleDockedOnRight
+                }
+            }
+        }
     }
 
     fun setHudState(state: OverlayHudState) {
@@ -120,6 +140,16 @@ class FloatingOverlayManager(
             val screenWidth = displayMetrics.widthPixels
             val screenHeight = displayMetrics.heightPixels
             val edgeMarginPx = (16 * displayMetrics.density).toInt()
+            val bubbleSizePx = (56 * displayMetrics.density).toInt()
+
+            val initialX = if (savedDockedOnRight) {
+                screenWidth - edgeMarginPx - bubbleSizePx
+            } else {
+                edgeMarginPx
+            }
+            val topLimit = (80 * displayMetrics.density).toInt()
+            val bottomLimit = screenHeight - bubbleSizePx - (100 * displayMetrics.density).toInt()
+            val initialY = (screenHeight * savedYRatio).toInt().coerceIn(topLimit, bottomLimit.coerceAtLeast(topLimit))
 
             val params = WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -130,10 +160,11 @@ class FloatingOverlayManager(
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = screenWidth - edgeMarginPx - (56 * displayMetrics.density).toInt()
-                y = (screenHeight * 0.45f).toInt()
+                x = initialX
+                y = initialY
             }
             windowLayoutParams = params
+            _isDockedOnRight.value = savedDockedOnRight
 
             val view = ComposeView(service).apply {
                 setViewTreeLifecycleOwner(this@FloatingOverlayManager)
@@ -180,6 +211,7 @@ class FloatingOverlayManager(
 
                                 val goesToRight = (p.x + viewWidth / 2) > (width / 2)
                                 _isDockedOnRight.value = goesToRight
+                                savedDockedOnRight = goesToRight
 
                                 p.x = if (goesToRight) {
                                     width - viewWidth - (12 * metrics.density).toInt()
@@ -192,8 +224,21 @@ class FloatingOverlayManager(
                                 val bottomLimit = height - viewHeight - (100 * metrics.density).toInt()
                                 p.y = p.y.coerceIn(topLimit, bottomLimit)
 
+                                val newYRatio = if (height > 0) p.y.toFloat() / height.toFloat() else 0.45f
+                                savedYRatio = newYRatio
+
                                 if (isViewAttached && composeView != null) {
                                     windowManager.updateViewLayout(composeView, p)
+                                }
+
+                                preferences?.let { prefs ->
+                                    managerScope.launch {
+                                        try {
+                                            prefs.setFloatingBubblePosition(goesToRight, newYRatio)
+                                        } catch (e: Exception) {
+                                            Log.e(TAG, "Error saving floating bubble position", e)
+                                        }
+                                    }
                                 }
                             }
                         },
@@ -208,7 +253,7 @@ class FloatingOverlayManager(
             composeView = view
             isViewAttached = true
             lifecycleRegistry.currentState = Lifecycle.State.RESUMED
-            Log.i(TAG, "Floating HUD overlay mounted successfully at middle-right.")
+            Log.i(TAG, "Floating HUD overlay mounted successfully at docked side ($savedDockedOnRight, yRatio=$savedYRatio).")
         } catch (e: Exception) {
             Log.e(TAG, "Failed to mount floating HUD overlay", e)
         }
@@ -234,5 +279,6 @@ class FloatingOverlayManager(
         hide()
         lifecycleRegistry.currentState = Lifecycle.State.DESTROYED
         viewModelStoreInstance.clear()
+        managerScope.cancel()
     }
 }
