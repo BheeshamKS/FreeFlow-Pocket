@@ -22,16 +22,22 @@
 ## ⚡ Highlights & Key Features
 
 - **⚡ Sub-Second Dictation (~300ms)**: Direct streaming to Groq Cloud LPUs (`whisper-large-v3`) via OkHttp3 with zero temporary files written to flash storage.
-- **🫧 Wispr Flow Floating Capsule**: Mounts an accessibility overlay over any focused text box with real-time reactive audio waveform bars. Supports both **Hold-to-Talk** and **Tap-to-Toggle**.
+- **🫧 Wispr Flow Floating Capsule**: Mounts an accessibility overlay over any focused editable text box with real-time reactive audio waveform bars. Supports both **Hold-to-Talk** and **Tap-to-Toggle**. Features persistent drag-and-dock memory restoring exact screen edge and vertical positioning.
 - **🛡️ Automatic Banking & Password Bypass**: Immediately suppresses and dismisses overlays on password fields (`isPassword == true`), secure windows (`FLAG_SECURE`), or user-defined excluded applications.
 - **✨ Side Goodies (Samsung Keys Cafe Custom IME)**:
   - Custom `InputMethodService` built in 100% Jetpack Compose.
-  - Pixel-matched pitch-black (`#000000`) and dark matte (`#18181C`) aesthetic with crisp typography.
-  - Dual-State Smartbar: Utility toolbar auto-transitions into 3 live word suggestions on typing.
+  - Seamless AMOLED black (`#0D0D11`) and theme-matched solid navigation bar, completely eliminating see-through background gaps.
+  - Dual-State Smartbar: Utility toolbar with Clipboard history, Samsung-style emoji categories with live search, Case inversion, and 3 live dynamic word suggestions on typing.
+  - **Universal Swipe-Down Gesture**: Natural swipe-down gesture across the smartbar, keycaps, and menus to dismiss the keyboard immediately.
   - **Concentric Radial Bloom Touch Shaders**: Hardware-accelerated canvas draw calls (`Modifier.drawWithCache`) render Good Lock Keys Cafe radial bloom ripples with sub-16ms latency without recomposing the keycap grid.
   - Integrated Smartbar FreeFlow Mic: Dims the keyboard and renders an audio-reactive glowing orb during voice dictation.
   - Spacebar horizontal swipe trackpad cursor movement and accelerated backspace.
 - **🥷 Ninja Mode Quick Settings Tile**: Dictate directly from Android's notification shade; transcribed speech is copied instantly to your system Clipboard with tactile haptic confirmation.
+- **💾 Keep Data on Uninstall & Seamless Updates**:
+  - `android:hasFragileUserData="true"`: Android OS prompts with a "Keep app data" checkbox when uninstalling, preserving all themes, API keys, bubble coordinates, and dictations on reinstall.
+  - Auto-Backup & Data Extraction Rules: Cloud and device-to-device migration support for preferences and local databases.
+  - Settings Backup & Restore: Built-in 1-tap JSON export and import for user settings in the Settings Studio.
+  - Unified Repository Keystore: Ensures cross-version update compatibility without signature mismatch.
 - **🔒 Zero-Keylogger & Hardware-Backed Security**: User Groq API keys are stored in `EncryptedSharedPreferences` backed by the Android Keystore.
 - **📁 100% Local Dictation History**: Searchable SQLite database via Room with word counters and latency metrics.
 
@@ -107,6 +113,9 @@ flowchart TD
 # Build Release APK and AAB Bundle
 ./gradlew assembleRelease bundleRelease
 ```
+
+### Pre-built Production APK
+A production release build is available at [`build_outputs/FreeFlow-Pocket.apk`](build_outputs/FreeFlow-Pocket.apk) (Version 1.0.2, Build 3), signed with APK Signature Scheme v2.
 
 ---
 
