@@ -1,6 +1,8 @@
 package com.bheeshamks.freeflow.ui.screens
 
 import android.Manifest
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -51,6 +53,7 @@ import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.VolumeUp
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -93,11 +96,14 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.bheeshamks.freeflow.core.data.model.BloomAnimationStyle
 import com.bheeshamks.freeflow.core.data.model.BloomColorPreset
+import com.bheeshamks.freeflow.core.data.model.DictationMode
 import com.bheeshamks.freeflow.core.data.model.HapticStrength
 import com.bheeshamks.freeflow.core.data.model.KeyBorderStyle
 import com.bheeshamks.freeflow.core.data.model.KeySoundTheme
 import com.bheeshamks.freeflow.core.data.model.KeyboardSettings
 import com.bheeshamks.freeflow.core.data.model.KeyboardTheme
+import kotlinx.coroutines.launch
+import org.json.JSONObject
 import com.bheeshamks.freeflow.core.data.prefs.ThemeAndGoodiesPreferences
 import com.bheeshamks.freeflow.core.network.GroqWhisperClient
 import com.bheeshamks.freeflow.core.security.ApiKeyStore
@@ -159,6 +165,8 @@ fun SettingsScreen(
     var isAccessibilityEnabled by remember { mutableStateOf(false) }
     var isOverlayEnabled by remember { mutableStateOf(false) }
     var isKeyboardEnabled by remember { mutableStateOf(false) }
+    var showRestoreDialog by remember { mutableStateOf(false) }
+    var restoreJsonInput by remember { mutableStateOf("") }
 
     var hasMicPermission by remember {
         mutableStateOf(
@@ -368,6 +376,29 @@ fun SettingsScreen(
                             )
                             context.startActivity(intent)
                         },
+                        onBackupSettings = {
+                            val jsonStr = exportSettingsToJson(settings, apiKeyStore.getApiKey())
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clip = ClipData.newPlainText("FreeFlow Settings Backup", jsonStr)
+                            clipboard.setPrimaryClip(clip)
+                            Toast.makeText(context, "Settings backup copied to clipboard!", Toast.LENGTH_SHORT).show()
+                            try {
+                                val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "text/plain"
+                                    putExtra(Intent.EXTRA_SUBJECT, "FreeFlow Pocket Settings Backup")
+                                    putExtra(Intent.EXTRA_TEXT, jsonStr)
+                                }
+                                context.startActivity(Intent.createChooser(shareIntent, "Save or Share Settings Backup"))
+                            } catch (e: Exception) {
+                                // ignore
+                            }
+                        },
+                        onRestoreSettings = {
+                            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                            val clipText = clipboard.primaryClip?.getItemAt(0)?.text?.toString() ?: ""
+                            restoreJsonInput = if (clipText.contains("keyboardTheme")) clipText else ""
+                            showRestoreDialog = true
+                        },
                         onReplayOnboarding = onReplayOnboarding
                     )
                 }
@@ -375,6 +406,64 @@ fun SettingsScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
         }
+    }
+
+    if (showRestoreDialog) {
+        AlertDialog(
+            onDismissRequest = { showRestoreDialog = false },
+            title = { Text("Restore Settings Backup", color = TextPrimary, fontWeight = FontWeight.Bold) },
+            text = {
+                Column {
+                    Text(
+                        "Paste your backup JSON below to restore themes, haptics, bubble positions, and API key:",
+                        color = TextSecondary,
+                        fontSize = 12.sp,
+                        lineHeight = 16.sp
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = restoreJsonInput,
+                        onValueChange = { restoreJsonInput = it },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(150.dp),
+                        placeholder = { Text("{\n  \"keyboardTheme\": \"AMOLED_BLACK\",\n  ...\n}", color = TextSecondary.copy(alpha = 0.5f), fontSize = 11.sp) },
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = PrimaryBlue,
+                            unfocusedBorderColor = DarkCardBorder,
+                            focusedTextColor = TextPrimary,
+                            unfocusedTextColor = TextPrimary
+                        ),
+                        textStyle = androidx.compose.ui.text.TextStyle(fontSize = 12.sp)
+                    )
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        scope.launch {
+                            val success = importSettingsFromJson(restoreJsonInput, preferences, apiKeyStore)
+                            if (success) {
+                                Toast.makeText(context, "Settings restored successfully!", Toast.LENGTH_SHORT).show()
+                                showRestoreDialog = false
+                            } else {
+                                Toast.makeText(context, "Invalid backup format. Please check JSON.", Toast.LENGTH_LONG).show()
+                            }
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
+                ) {
+                    Text("Restore", color = Color.White)
+                }
+            },
+            dismissButton = {
+                OutlinedButton(onClick = { showRestoreDialog = false }) {
+                    Text("Cancel", color = TextSecondary)
+                }
+            },
+            containerColor = DarkBackground,
+            shape = RoundedCornerShape(16.dp)
+        )
     }
 }
 
@@ -1147,8 +1236,12 @@ private fun SystemPermissionsTabContent(
     onEnableAccessibility: () -> Unit,
     isOverlayEnabled: Boolean,
     onEnableOverlay: () -> Unit,
+    onBackupSettings: () -> Unit,
+    onRestoreSettings: () -> Unit,
     onReplayOnboarding: () -> Unit
 ) {
+    val context = LocalContext.current
+
     SettingsCard(
         title = "Permissions Hub",
         icon = Icons.Default.Security
@@ -1183,6 +1276,81 @@ private fun SystemPermissionsTabContent(
             actionLabel = "Grant",
             onAction = onEnableOverlay
         )
+    }
+
+    SettingsCard(
+        title = "Updates & Data Preservation",
+        icon = Icons.Default.Info
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column {
+                Text("FreeFlow Pocket", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                Text("Version 1.0.2 (Build 3)", color = TextSecondary, fontSize = 12.sp)
+            }
+            Box(
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF14241B))
+                    .border(1.dp, Color(0xFF00E676).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            ) {
+                Text("Updatable", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Text(
+            text = "• In-Place Updates: Seamlessly update without losing any settings by installing new release APKs over existing installs.\n• Keep Data on Uninstall: When uninstalling FreeFlow, Android OS displays a 'Keep app data' checkbox. Leaving it checked preserves your custom themes, API keys, bubble coordinates, and dictation history upon reinstall.\n• Consistent Signing: Built with unified release keys across all versions.",
+            fontSize = 12.sp,
+            color = TextSecondary,
+            lineHeight = 17.sp
+        )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            OutlinedButton(
+                onClick = onBackupSettings,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3A48))
+            ) {
+                Text("Backup Settings", fontSize = 12.sp)
+            }
+            OutlinedButton(
+                onClick = onRestoreSettings,
+                modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
+                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3A48))
+            ) {
+                Text("Restore Settings", fontSize = 12.sp)
+            }
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        Button(
+            onClick = {
+                val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/bheeshamks/FreeFlow-Pocket/releases")).apply {
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                context.startActivity(intent)
+            },
+            colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("Check for Updates / Releases", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+        }
     }
 
     SettingsCard(
@@ -1316,5 +1484,105 @@ private fun BubbleMock(text: String, color: Color) {
         contentAlignment = Alignment.Center
     ) {
         Text(text, fontSize = 10.sp, color = color, fontWeight = FontWeight.Bold)
+    }
+}
+
+private fun exportSettingsToJson(settings: KeyboardSettings, apiKey: String?): String {
+    val json = JSONObject()
+    json.put("keyboardTheme", settings.keyboardTheme.name)
+    json.put("animationStyle", settings.animationStyle.name)
+    json.put("colorPreset", settings.colorPreset.name)
+    json.put("borderStyle", settings.borderStyle.name)
+    json.put("showNumberRow", settings.showNumberRow)
+    json.put("showKeyPreviewPopup", settings.showKeyPreviewPopup)
+    json.put("soundTheme", settings.soundTheme.name)
+    json.put("soundVolume", settings.soundVolume.toDouble())
+    json.put("bloomRadiusDp", settings.bloomRadiusDp.toDouble())
+    json.put("animationSpeedMs", settings.animationSpeedMs)
+    json.put("hapticStrength", settings.hapticStrength.name)
+    json.put("keyHeightDp", settings.keyHeightDp.toDouble())
+    json.put("cornerRadiusDp", settings.cornerRadiusDp.toDouble())
+    json.put("dictationMode", settings.dictationMode.name)
+    json.put("isKeysCafeEnabled", settings.isKeysCafeEnabled)
+    json.put("floatingBubbleOpacity", settings.floatingBubbleOpacity.toDouble())
+    json.put("floatingBubbleDockedOnRight", settings.floatingBubbleDockedOnRight)
+    json.put("floatingBubbleYRatio", settings.floatingBubbleYRatio.toDouble())
+    json.put("groqModel", settings.groqModel)
+    if (!apiKey.isNullOrBlank()) {
+        json.put("groqApiKey", apiKey)
+    }
+    return json.toString(2)
+}
+
+private suspend fun importSettingsFromJson(
+    jsonStr: String,
+    preferences: ThemeAndGoodiesPreferences,
+    apiKeyStore: ApiKeyStore
+): Boolean {
+    return try {
+        val json = JSONObject(jsonStr.trim())
+        if (json.has("keyboardTheme")) {
+            preferences.updateKeyboardTheme(KeyboardTheme.valueOf(json.getString("keyboardTheme")))
+        }
+        if (json.has("animationStyle")) {
+            preferences.updateAnimationStyle(BloomAnimationStyle.valueOf(json.getString("animationStyle")))
+        }
+        if (json.has("colorPreset")) {
+            preferences.updateColorPreset(BloomColorPreset.valueOf(json.getString("colorPreset")))
+        }
+        if (json.has("borderStyle")) {
+            preferences.updateBorderStyle(KeyBorderStyle.valueOf(json.getString("borderStyle")))
+        }
+        if (json.has("showNumberRow")) {
+            preferences.updateShowNumberRow(json.getBoolean("showNumberRow"))
+        }
+        if (json.has("showKeyPreviewPopup")) {
+            preferences.updateShowKeyPreview(json.getBoolean("showKeyPreviewPopup"))
+        }
+        if (json.has("soundTheme")) {
+            preferences.updateSoundTheme(KeySoundTheme.valueOf(json.getString("soundTheme")))
+        }
+        if (json.has("soundVolume")) {
+            preferences.updateSoundVolume(json.getDouble("soundVolume").toFloat())
+        }
+        if (json.has("bloomRadiusDp")) {
+            preferences.updateBloomRadius(json.getDouble("bloomRadiusDp").toFloat())
+        }
+        if (json.has("animationSpeedMs")) {
+            preferences.updateAnimationSpeed(json.getInt("animationSpeedMs"))
+        }
+        if (json.has("hapticStrength")) {
+            preferences.updateHapticStrength(HapticStrength.valueOf(json.getString("hapticStrength")))
+        }
+        if (json.has("keyHeightDp")) {
+            preferences.updateKeyHeight(json.getDouble("keyHeightDp").toFloat())
+        }
+        if (json.has("cornerRadiusDp")) {
+            preferences.updateCornerRadius(json.getDouble("cornerRadiusDp").toFloat())
+        }
+        if (json.has("dictationMode")) {
+            preferences.updateDictationMode(DictationMode.valueOf(json.getString("dictationMode")))
+        }
+        if (json.has("isKeysCafeEnabled")) {
+            preferences.setKeysCafeEnabled(json.getBoolean("isKeysCafeEnabled"))
+        }
+        if (json.has("floatingBubbleOpacity")) {
+            preferences.updateFloatingBubbleOpacity(json.getDouble("floatingBubbleOpacity").toFloat())
+        }
+        if (json.has("floatingBubbleDockedOnRight") && json.has("floatingBubbleYRatio")) {
+            preferences.setFloatingBubblePosition(
+                json.getBoolean("floatingBubbleDockedOnRight"),
+                json.getDouble("floatingBubbleYRatio").toFloat()
+            )
+        }
+        if (json.has("groqModel")) {
+            preferences.updateGroqModel(json.getString("groqModel"))
+        }
+        if (json.has("groqApiKey")) {
+            apiKeyStore.saveApiKey(json.getString("groqApiKey"))
+        }
+        true
+    } catch (e: Exception) {
+        false
     }
 }
