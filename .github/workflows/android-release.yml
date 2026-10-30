@@ -67,13 +67,32 @@ jobs:
       - name: Build Release APK and AAB
         run: gradle assembleRelease bundleRelease --stacktrace
 
+      - name: Prepare Named Release Artifacts
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          if [ -z "$VERSION" ] || [ "$VERSION" = "main" ]; then
+            VERSION=$(grep 'versionName = ' app/build.gradle.kts | head -n1 | sed -E 's/.*versionName = "([^"]+)".*/\1/')
+          fi
+          echo "Packaging FreeFlow-Pocket version: $VERSION"
+          mkdir -p release-artifacts
+          
+          APK_FILE=$(find app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          if [ -f "$APK_FILE" ]; then
+            cp "$APK_FILE" "release-artifacts/FreeFlow-Pocket-${VERSION}.apk"
+          fi
+          
+          AAB_FILE=$(find app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+          if [ -f "$AAB_FILE" ]; then
+            cp "$AAB_FILE" "release-artifacts/FreeFlow-Pocket-${VERSION}.aab"
+          fi
+          
+          ls -lh release-artifacts/
+
       - name: Upload Release Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: freeflow-release-bundles
-          path: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+          path: release-artifacts/*
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -83,6 +102,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: |
-            app/build/outputs/apk/release/*.apk
-            app/build/outputs/bundle/release/*.aab
+          files: release-artifacts/*
