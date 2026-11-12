@@ -11,18 +11,14 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -32,11 +28,17 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.bheeshamks.freeflow.ui.theme.DarkBackground
+import com.bheeshamks.freeflow.ui.theme.DarkCard
+import com.bheeshamks.freeflow.ui.theme.DarkCardBorder
+import com.bheeshamks.freeflow.ui.theme.DarkRaisedSubtle
+import com.bheeshamks.freeflow.ui.theme.OnPrimaryBlue
+import com.bheeshamks.freeflow.ui.theme.PrimaryBlue
+import com.bheeshamks.freeflow.ui.theme.TextPrimary
+import com.bheeshamks.freeflow.ui.theme.TextSecondary
 
 /**
  * Dimmed voice dictation overlay rendered directly over the keyboard grid.
@@ -51,8 +53,8 @@ fun KeyboardVoiceHUD(
 ) {
     val infiniteTransition = rememberInfiniteTransition(label = "OrbPulse")
     val pulseScale by infiniteTransition.animateFloat(
-        initialValue = 0.92f,
-        targetValue = 1.08f,
+        initialValue = 0.94f,
+        targetValue = 1.06f,
         animationSpec = infiniteRepeatable(
             animation = tween(800),
             repeatMode = RepeatMode.Reverse
@@ -63,7 +65,7 @@ fun KeyboardVoiceHUD(
     Box(
         modifier = modifier
             .fillMaxWidth()
-            .background(Color(0xF2121216))
+            .background(DarkBackground.copy(alpha = 0.94f))
             .clickable { onStopClick() },
         contentAlignment = Alignment.Center
     ) {
@@ -71,27 +73,20 @@ fun KeyboardVoiceHUD(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
-            // Audio-reactive Glowing Orb
+            // Audio-reactive Voice Orb
             Box(
                 contentAlignment = Alignment.Center,
                 modifier = Modifier
-                    .size(100.dp)
+                    .size(88.dp)
                     .scale(if (isRecording) pulseScale * (1f + amplitude * 0.35f) else 1f)
             ) {
-                // Outer glow
+                // Outer subtle ring
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
                         .clip(CircleShape)
-                        .background(
-                            brush = Brush.radialGradient(
-                                colors = listOf(
-                                    Color(0x665AB4FF),
-                                    Color(0x225AB4FF),
-                                    Color.Transparent
-                                )
-                            )
-                        )
+                        .background(DarkRaisedSubtle.copy(alpha = 0.6f))
+                        .border(1.dp, DarkCardBorder, CircleShape)
                 )
 
                 // Inner core
@@ -99,20 +94,13 @@ fun KeyboardVoiceHUD(
                     modifier = Modifier
                         .size(56.dp)
                         .clip(CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = if (isTranscribing) {
-                                    listOf(Color(0xFF00E676), Color(0xFF00B0FF))
-                                } else {
-                                    listOf(Color(0xFF5AB4FF), Color(0xFF2979FF))
-                                }
-                            )
-                        ),
+                        .background(if (isTranscribing) DarkCard else PrimaryBlue)
+                        .border(1.dp, if (isTranscribing) DarkCardBorder else PrimaryBlue, CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     if (isTranscribing) {
                         CircularProgressIndicator(
-                            color = Color.White,
+                            color = PrimaryBlue,
                             strokeWidth = 2.5.dp,
                             modifier = Modifier.size(24.dp)
                         )
@@ -120,7 +108,7 @@ fun KeyboardVoiceHUD(
                         Icon(
                             imageVector = Icons.Default.Mic,
                             contentDescription = "Voice Dictation",
-                            tint = Color.White,
+                            tint = OnPrimaryBlue,
                             modifier = Modifier.size(28.dp)
                         )
                     }
@@ -131,7 +119,7 @@ fun KeyboardVoiceHUD(
 
             Text(
                 text = if (isTranscribing) "Transcribing speech..." else "Listening to your voice...",
-                color = Color.White,
+                color = TextPrimary,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium
             )
@@ -140,7 +128,7 @@ fun KeyboardVoiceHUD(
 
             Text(
                 text = "Tap anywhere to finish and insert text",
-                color = Color(0xFF888894),
+                color = TextSecondary,
                 fontSize = 12.sp
             )
         }

@@ -57,3 +57,11 @@ val FreeFlowTypography = Typography(
         color = TextTertiary
     )
 )
+
+val MonospaceTabular = TextStyle(
+    fontFamily = FontFamily.Monospace,
+    fontWeight = FontWeight.Medium,
+    fontSize = 12.sp,
+    lineHeight = 16.sp,
+    color = TextSecondary
+)

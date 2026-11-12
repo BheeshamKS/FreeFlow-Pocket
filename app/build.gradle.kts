@@ -84,9 +84,13 @@ android {
         }
     }
 
-    applicationVariants.all {
+    base {
+        archivesName.set("FreeFlow-Pocket")
+    }
+
+    applicationVariants.configureEach {
         outputs.configureEach {
-            (this as? com.android.build.gradle.api.ApkVariantOutput)?.let { output ->
+            (this as? com.android.build.gradle.internal.api.ApkVariantOutputImpl)?.let { output ->
                 output.outputFileName = "FreeFlow-Pocket-${versionName}.apk"
             }
         }

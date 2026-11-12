@@ -12,13 +12,6 @@ import android.os.Vibrator
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.FastOutSlowInEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -33,12 +26,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Key
@@ -47,7 +37,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
@@ -85,9 +74,12 @@ import com.bheeshamks.freeflow.ui.theme.AccentRed
 import com.bheeshamks.freeflow.ui.theme.DarkBackground
 import com.bheeshamks.freeflow.ui.theme.DarkCard
 import com.bheeshamks.freeflow.ui.theme.DarkCardBorder
+import com.bheeshamks.freeflow.ui.theme.DarkRaised
+import com.bheeshamks.freeflow.ui.theme.MonospaceTabular
 import com.bheeshamks.freeflow.ui.theme.PrimaryBlue
 import com.bheeshamks.freeflow.ui.theme.TextPrimary
 import com.bheeshamks.freeflow.ui.theme.TextSecondary
+import com.bheeshamks.freeflow.ui.theme.TextTertiary
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -227,8 +219,7 @@ fun HomeScreen(
         modifier = modifier
             .fillMaxSize()
             .background(DarkBackground)
-            .padding(horizontal = 20.dp, vertical = 16.dp)
-            .verticalScroll(rememberScrollState()),
+            .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         // Header Row
@@ -243,21 +234,21 @@ fun HomeScreen(
             ) {
                 Icon(
                     painter = painterResource(id = R.drawable.ic_freeflow_logo),
-                    contentDescription = "FreeFlow Logo",
+                    contentDescription = null,
                     tint = Color.Unspecified,
-                    modifier = Modifier.size(38.dp)
+                    modifier = Modifier.size(36.dp)
                 )
                 Column {
                     Text(
                         text = "FreeFlow",
-                        fontSize = 26.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.SemiBold,
                         color = TextPrimary
                     )
                     Text(
-                        text = "Whisper Large V3 via Groq LPU",
-                        fontSize = 13.sp,
-                        color = PrimaryBlue
+                        text = "Whisper Large V3 via Groq",
+                        fontSize = 12.sp,
+                        color = TextSecondary
                     )
                 }
             }
@@ -265,46 +256,47 @@ fun HomeScreen(
             if (!hasApiKey) {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x33FF5252))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DarkRaised)
+                        .border(1.dp, AccentRed.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
                         .clickable { onNavigateToSettings() }
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
                     Icon(
                         imageVector = Icons.Default.Key,
-                        contentDescription = "API Key",
+                        contentDescription = null,
                         tint = AccentRed,
-                        modifier = Modifier.size(14.dp)
+                        modifier = Modifier.size(13.dp)
                     )
                     Text(
-                        text = "Set Key",
+                        text = "Set key",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.Bold,
+                        fontWeight = FontWeight.Medium,
                         color = AccentRed
                     )
                 }
             } else {
                 Row(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(16.dp))
-                        .background(Color(0x2200E676))
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(DarkRaised)
+                        .border(1.dp, DarkCardBorder, RoundedCornerShape(8.dp))
                         .padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.Check,
-                        contentDescription = "Active",
-                        tint = AccentGreen,
-                        modifier = Modifier.size(14.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(6.dp)
+                            .clip(CircleShape)
+                            .background(AccentGreen)
                     )
                     Text(
-                        text = "Groq Ready",
+                        text = "Ready",
                         fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = AccentGreen
+                        color = TextSecondary
                     )
                 }
             }
@@ -316,11 +308,10 @@ fun HomeScreen(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .weight(1f, fill = false)
-                .height(280.dp)
-                .clip(RoundedCornerShape(20.dp))
+                .weight(1f)
+                .clip(RoundedCornerShape(16.dp))
                 .background(DarkCard)
-                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp))
+                .border(1.dp, DarkCardBorder, RoundedCornerShape(16.dp))
                 .padding(16.dp)
         ) {
             Column(modifier = Modifier.fillMaxSize()) {
@@ -329,8 +320,8 @@ fun HomeScreen(
                     onValueChange = { transcribedText = it },
                     placeholder = {
                         Text(
-                            text = "Tap the microphone below and start speaking. Spoken words will be transcribed in ~300ms...",
-                            color = TextSecondary,
+                            text = "Tap microphone below to record speech",
+                            color = TextTertiary,
                             fontSize = 15.sp
                         )
                     },
@@ -357,16 +348,13 @@ fun HomeScreen(
 
                     Text(
                         text = "$wordCount words · $charCount chars",
-                        fontSize = 12.sp,
-                        color = TextSecondary
+                        style = MonospaceTabular
                     )
 
                     lastLatencyMs?.let { latency ->
                         Text(
-                            text = "⚡ ${latency}ms latency",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = PrimaryBlue
+                            text = "${latency}ms",
+                            style = MonospaceTabular.copy(color = TextSecondary)
                         )
                     }
                 }
@@ -378,21 +366,22 @@ fun HomeScreen(
         // Action Buttons Row: Copy, Share, Clear
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Copy
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF222228))
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DarkRaised)
+                    .border(1.dp, DarkCardBorder, RoundedCornerShape(10.dp))
                     .clickable {
                         if (transcribedText.isNotBlank()) {
                             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
                             clipboard.setPrimaryClip(ClipData.newPlainText("FreeFlow Transcription", transcribedText))
                             triggerHaptic(VibrationEffect.EFFECT_CLICK)
-                            Toast.makeText(context, "Copied to clipboard ✓", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Copied to clipboard", Toast.LENGTH_SHORT).show()
                         }
                     },
                 verticalAlignment = Alignment.CenterVertically,
@@ -401,20 +390,21 @@ fun HomeScreen(
                 Icon(
                     imageVector = Icons.Default.ContentCopy,
                     contentDescription = "Copy",
-                    tint = Color.White,
+                    tint = TextPrimary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "Copy", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(text = "Copy", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
 
             // Share
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF222228))
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DarkRaised)
+                    .border(1.dp, DarkCardBorder, RoundedCornerShape(10.dp))
                     .clickable {
                         if (transcribedText.isNotBlank()) {
                             val sendIntent = Intent().apply {
@@ -431,20 +421,21 @@ fun HomeScreen(
                 Icon(
                     imageVector = Icons.Default.Share,
                     contentDescription = "Share",
-                    tint = Color.White,
+                    tint = TextPrimary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "Share", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(text = "Share", color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
 
             // Clear
             Row(
                 modifier = Modifier
                     .weight(1f)
-                    .height(44.dp)
-                    .clip(RoundedCornerShape(12.dp))
-                    .background(Color(0xFF222228))
+                    .height(40.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(DarkRaised)
+                    .border(1.dp, DarkCardBorder, RoundedCornerShape(10.dp))
                     .clickable {
                         transcribedText = ""
                         lastLatencyMs = null
@@ -455,59 +446,33 @@ fun HomeScreen(
                 Icon(
                     imageVector = Icons.Default.Clear,
                     contentDescription = "Clear",
-                    tint = Color(0xFFFF5252),
+                    tint = TextSecondary,
                     modifier = Modifier.size(16.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
-                Text(text = "Clear", color = Color(0xFFFF5252), fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                Text(text = "Clear", color = TextSecondary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             }
         }
 
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(modifier = Modifier.height(20.dp))
 
         // Hero Recording Control Section
         Box(
-            modifier = Modifier.size(120.dp),
+            modifier = Modifier.size(64.dp),
             contentAlignment = Alignment.Center
         ) {
-            // Animated Pulse Wave when recording
-            if (isRecording) {
-                val infiniteTransition = rememberInfiniteTransition(label = "Pulse")
-                val pulseScale by infiniteTransition.animateFloat(
-                    initialValue = 1f,
-                    targetValue = 1.35f,
-                    animationSpec = infiniteRepeatable(
-                        animation = tween(1000, easing = FastOutSlowInEasing),
-                        repeatMode = RepeatMode.Reverse
-                    ),
-                    label = "PulseScale"
-                )
-
-                Box(
-                    modifier = Modifier
-                        .size(90.dp)
-                        .scale(pulseScale)
-                        .clip(CircleShape)
-                        .background(Color(0x335AB4FF))
-                )
-            }
-
-            // Central Tap-to-Talk Button
             Box(
                 modifier = Modifier
-                    .size(76.dp)
-                    .shadow(elevation = 16.dp, shape = CircleShape)
+                    .size(64.dp)
                     .clip(CircleShape)
                     .background(
-                        brush = Brush.verticalGradient(
-                            if (isRecording) {
-                                listOf(Color(0xFFFF5252), Color(0xFFD50000))
-                            } else {
-                                listOf(Color(0xFF5AB4FF), Color(0xFF0070E0))
-                            }
-                        )
+                        if (isRecording) AccentRed else DarkRaised
                     )
-                    .border(2.dp, Color(0x66FFFFFF), CircleShape)
+                    .border(
+                        1.dp,
+                        if (isRecording) AccentRed else DarkCardBorder,
+                        CircleShape
+                    )
                     .clickable {
                         if (isRecording) {
                             stopRecording()
@@ -519,62 +484,58 @@ fun HomeScreen(
             ) {
                 if (isTranscribing) {
                     CircularProgressIndicator(
-                        color = Color.White,
-                        strokeWidth = 3.dp,
-                        modifier = Modifier.size(34.dp)
+                        color = PrimaryBlue,
+                        strokeWidth = 2.5.dp,
+                        modifier = Modifier.size(28.dp)
                     )
                 } else if (isRecording) {
                     Icon(
                         imageVector = Icons.Default.Stop,
                         contentDescription = "Stop Recording",
                         tint = Color.White,
-                        modifier = Modifier.size(34.dp)
+                        modifier = Modifier.size(28.dp)
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Default.Mic,
                         contentDescription = "Start Recording",
-                        tint = Color.White,
-                        modifier = Modifier.size(36.dp)
+                        tint = PrimaryBlue,
+                        modifier = Modifier.size(28.dp)
                     )
                 }
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
         // Status or Timer Label
         if (isRecording) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Box(
                     modifier = Modifier
-                        .size(8.dp)
+                        .size(6.dp)
                         .clip(CircleShape)
-                        .background(Color(0xFFFF5252))
+                        .background(AccentRed)
                 )
                 Text(
-                    text = String.format("Recording: %02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60),
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    fontFamily = FontFamily.Monospace
+                    text = String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60),
+                    style = MonospaceTabular.copy(color = TextPrimary, fontWeight = FontWeight.SemiBold)
                 )
             }
         } else if (isTranscribing) {
             Text(
-                text = "Transcribing with Groq Whisper LPU...",
-                fontSize = 13.sp,
-                fontWeight = FontWeight.Medium,
-                color = AccentGreen
+                text = "Transcribing",
+                fontSize = 12.sp,
+                color = TextSecondary
             )
         } else {
             Text(
-                text = "Tap mic to start dictating",
-                fontSize = 13.sp,
-                color = TextSecondary
+                text = "Tap to record",
+                fontSize = 12.sp,
+                color = TextTertiary
             )
         }
 
@@ -587,6 +548,6 @@ fun HomeScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(12.dp))
     }
 }

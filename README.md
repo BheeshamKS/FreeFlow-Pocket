@@ -19,7 +19,7 @@
 
 ---
 
-## ⚡ Highlights & Key Features
+## Highlights & Key Features
 
 - **⚡ Sub-Second Dictation (~300ms)**: Direct streaming to Groq Cloud LPUs (`whisper-large-v3`) via OkHttp3 with zero temporary files written to flash storage.
 - **🫧 Wispr Flow Floating Capsule**: Mounts an accessibility overlay over any focused editable text box with real-time reactive audio waveform bars. Supports both **Hold-to-Talk** and **Tap-to-Toggle**. Features persistent drag-and-dock memory restoring exact screen edge and vertical positioning.
@@ -43,7 +43,7 @@
 
 ---
 
-## 🏛️ System Architecture
+## System Architecture
 
 ```mermaid
 flowchart TD
@@ -84,7 +84,7 @@ flowchart TD
 
 ---
 
-## 📋 Google Play & F-Droid Prominent Disclosure
+## Google Play & F-Droid Prominent Disclosure
 
 > **Accessibility Service API Usage**
 > FreeFlow uses the Android `AccessibilityService` API exclusively to detect when an editable text box gains input focus, allowing the app to display the floating voice capsule HUD and paste the transcribed text directly at your cursor position via `ACTION_SET_TEXT` or clipboard paste.
@@ -95,7 +95,7 @@ flowchart TD
 
 ---
 
-## 🚀 Building & Publishing
+## Building & Publishing
 
 ### Prerequisites
 - JDK 17
@@ -115,10 +115,10 @@ flowchart TD
 ```
 
 ### Pre-built Production APK
-A production release build is available at [`build_outputs/FreeFlow-Pocket.apk`](build_outputs/FreeFlow-Pocket.apk) (Version 1.0.2, Build 3), signed with APK Signature Scheme v2.
+Production release builds and signed APKs are available on [GitHub Releases](https://github.com/bheeshamks/FreeFlow-Pocket/releases).
 
 ---
 
-## 📄 License
+## License
 
 FreeFlow is licensed under the [MIT License](LICENSE).

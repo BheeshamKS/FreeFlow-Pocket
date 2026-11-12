@@ -51,6 +51,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.bheeshamks.freeflow.R
+import com.bheeshamks.freeflow.ui.theme.AccentRed
+import com.bheeshamks.freeflow.ui.theme.DarkCard
+import com.bheeshamks.freeflow.ui.theme.DarkCardBorder
+import com.bheeshamks.freeflow.ui.theme.DarkRaised
+import com.bheeshamks.freeflow.ui.theme.OnPrimaryBlue
+import com.bheeshamks.freeflow.ui.theme.PrimaryBlue
+import com.bheeshamks.freeflow.ui.theme.TextPrimary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 
@@ -134,16 +141,12 @@ fun FloatingWaveformHUD(
                     modifier = Modifier
                         .size(52.dp)
                         .alpha(opacity)
-                        .shadow(elevation = 12.dp, shape = CircleShape, ambientColor = Color(0x66000000))
+                        .shadow(elevation = 2.dp, shape = CircleShape)
                         .clip(CircleShape)
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xF01C1C22), Color(0xF0101014))
-                            )
-                        )
+                        .background(DarkCard)
                         .border(
-                            width = 1.5.dp,
-                            color = Color(0x445AB4FF),
+                            width = 1.dp,
+                            color = DarkCardBorder,
                             shape = CircleShape
                         )
                         .clickable {
@@ -212,26 +215,22 @@ fun FloatingWaveformHUD(
                 Row(
                     modifier = Modifier
                         .height(48.dp)
-                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp))
+                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(24.dp))
                         .clip(RoundedCornerShape(24.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xF014221A), Color(0xF00A140E))
-                            )
-                        )
-                        .border(1.dp, Color(0x5500E676), RoundedCornerShape(24.dp))
+                        .background(DarkCard)
+                        .border(1.dp, DarkCardBorder, RoundedCornerShape(24.dp))
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     CircularProgressIndicator(
-                        color = Color(0xFF00E676),
+                        color = PrimaryBlue,
                         strokeWidth = 2.5.dp,
                         modifier = Modifier.size(20.dp)
                     )
                     Text(
                         text = "Transcribing...",
-                        color = Color(0xFF00E676),
+                        color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -243,14 +242,10 @@ fun FloatingWaveformHUD(
                 Row(
                     modifier = Modifier
                         .height(48.dp)
-                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp))
+                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(24.dp))
                         .clip(RoundedCornerShape(24.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xF0102030), Color(0xF008121A))
-                            )
-                        )
-                        .border(1.dp, Color(0x665AB4FF), RoundedCornerShape(24.dp))
+                        .background(DarkCard)
+                        .border(1.dp, DarkCardBorder, RoundedCornerShape(24.dp))
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -258,12 +253,12 @@ fun FloatingWaveformHUD(
                     Icon(
                         imageVector = Icons.Default.Check,
                         contentDescription = "Success",
-                        tint = Color(0xFF5AB4FF),
+                        tint = PrimaryBlue,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "Transcribed ✓",
-                        color = Color(0xFF5AB4FF),
+                        text = "Transcribed",
+                        color = TextPrimary,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -275,14 +270,10 @@ fun FloatingWaveformHUD(
                 Row(
                     modifier = Modifier
                         .height(48.dp)
-                        .shadow(elevation = 12.dp, shape = RoundedCornerShape(24.dp))
+                        .shadow(elevation = 2.dp, shape = RoundedCornerShape(24.dp))
                         .clip(RoundedCornerShape(24.dp))
-                        .background(
-                            brush = Brush.verticalGradient(
-                                colors = listOf(Color(0xF02A1416), Color(0xF0180A0C))
-                            )
-                        )
-                        .border(1.dp, Color(0x66FF5252), RoundedCornerShape(24.dp))
+                        .background(DarkCard)
+                        .border(1.dp, DarkCardBorder, RoundedCornerShape(24.dp))
                         .clickable { onErrorClick() }
                         .padding(horizontal = 16.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -291,12 +282,12 @@ fun FloatingWaveformHUD(
                     Icon(
                         imageVector = Icons.Default.Close,
                         contentDescription = "Error",
-                        tint = Color(0xFFFF5252),
+                        tint = AccentRed,
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
                         text = errorMessage?.ifBlank { "Setup FreeFlow" } ?: "Setup FreeFlow",
-                        color = Color(0xFFFF5252),
+                        color = AccentRed,
                         fontSize = 13.sp,
                         fontWeight = FontWeight.SemiBold
                     )
@@ -311,21 +302,17 @@ private fun CancelBubble(onCancel: () -> Unit) {
     Box(
         modifier = Modifier
             .size(46.dp)
-            .shadow(elevation = 10.dp, shape = CircleShape)
+            .shadow(elevation = 2.dp, shape = CircleShape)
             .clip(CircleShape)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xF0281418), Color(0xF0180A0E))
-                )
-            )
-            .border(1.5.dp, Color(0x66FF5252), CircleShape)
+            .background(DarkRaised)
+            .border(1.dp, DarkCardBorder, CircleShape)
             .clickable { onCancel() },
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.Close,
             contentDescription = "Cancel Transcription",
-            tint = Color(0xFFFF5252),
+            tint = AccentRed,
             modifier = Modifier.size(22.dp)
         )
     }
@@ -336,21 +323,17 @@ private fun DoneBubble(onDone: () -> Unit) {
     Box(
         modifier = Modifier
             .size(48.dp)
-            .shadow(elevation = 12.dp, shape = CircleShape)
+            .shadow(elevation = 2.dp, shape = CircleShape)
             .clip(CircleShape)
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xFF00E676), Color(0xFF00B248))
-                )
-            )
-            .border(1.5.dp, Color(0x88FFFFFF), CircleShape)
+            .background(PrimaryBlue)
+            .border(1.dp, PrimaryBlue, CircleShape)
             .clickable { onDone() },
         contentAlignment = Alignment.Center
     ) {
         Icon(
             imageVector = Icons.Default.Check,
             contentDescription = "Finish and Transcribe",
-            tint = Color.Black,
+            tint = OnPrimaryBlue,
             modifier = Modifier.size(26.dp)
         )
     }
@@ -364,14 +347,10 @@ private fun WaveformPill(
     Row(
         modifier = Modifier
             .height(48.dp)
-            .shadow(elevation = 10.dp, shape = RoundedCornerShape(24.dp))
+            .shadow(elevation = 2.dp, shape = RoundedCornerShape(24.dp))
             .clip(RoundedCornerShape(24.dp))
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(Color(0xF0181820), Color(0xF00E0E12))
-                )
-            )
-            .border(1.dp, Color(0x445AB4FF), RoundedCornerShape(24.dp))
+            .background(DarkRaised)
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(24.dp))
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -379,7 +358,7 @@ private fun WaveformPill(
         LiveWaveformBars(amplitude = amplitude)
         Text(
             text = String.format("%02d:%02d", elapsedSeconds / 60, elapsedSeconds % 60),
-            color = Color.White,
+            color = TextPrimary,
             fontSize = 13.sp,
             fontWeight = FontWeight.Bold
         )
@@ -403,14 +382,7 @@ private fun LiveWaveformBars(amplitude: Float) {
                     .width(3.5.dp)
                     .height(barHeight)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF5AB4FF),
-                                Color(0xFF00E676)
-                            )
-                        )
-                    )
+                    .background(PrimaryBlue)
             )
         }
     }
