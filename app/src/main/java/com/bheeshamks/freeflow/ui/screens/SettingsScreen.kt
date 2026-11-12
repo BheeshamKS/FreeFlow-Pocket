@@ -1293,7 +1293,7 @@ private fun SystemPermissionsTabContent(
         ) {
             Column {
                 Text("FreeFlow Pocket", color = TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                Text("Version 1.0.2 (Build 3)", color = TextSecondary, fontSize = 12.sp)
+                Text("Version 1.0.3 (Build 4)", color = TextSecondary, fontSize = 12.sp)
             }
             Box(
                 modifier = Modifier
