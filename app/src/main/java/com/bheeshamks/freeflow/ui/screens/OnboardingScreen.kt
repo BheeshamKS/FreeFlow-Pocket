@@ -83,6 +83,9 @@ import com.bheeshamks.freeflow.ui.theme.AccentRed
 import com.bheeshamks.freeflow.ui.theme.DarkBackground
 import com.bheeshamks.freeflow.ui.theme.DarkCard
 import com.bheeshamks.freeflow.ui.theme.DarkCardBorder
+import com.bheeshamks.freeflow.ui.theme.DarkRaised
+import com.bheeshamks.freeflow.ui.theme.DarkRaisedSubtle
+import com.bheeshamks.freeflow.ui.theme.OnPrimaryBlue
 import com.bheeshamks.freeflow.ui.theme.PrimaryBlue
 import com.bheeshamks.freeflow.ui.theme.TextPrimary
 import com.bheeshamks.freeflow.ui.theme.TextSecondary
@@ -166,7 +169,7 @@ fun OnboardingScreen(
                             when {
                                 isActive -> PrimaryBlue
                                 isCompleted -> AccentGreen
-                                else -> Color(0xFF282832)
+                                else -> DarkRaised
                             }
                         )
                 )
@@ -203,7 +206,7 @@ fun OnboardingScreen(
                             isTestingKey = false
                             if (result.isSuccess) {
                                 isKeyValid = true
-                                keyValidationMessage = "Groq LPU verified ✓ (${result.getOrNull()} models)"
+                                keyValidationMessage = "Groq LPU verified (${result.getOrNull()} models)"
                             } else {
                                 isKeyValid = false
                                 keyValidationMessage = "Failed: ${result.exceptionOrNull()?.message ?: "Invalid API Key"}"
@@ -253,22 +256,17 @@ private fun Step1Welcome(onNext: () -> Unit) {
         // Hero Icon
         Box(
             modifier = Modifier
-                .size(108.dp)
-                .shadow(elevation = 20.dp, shape = CircleShape)
-                .clip(CircleShape)
-                .background(
-                    brush = Brush.verticalGradient(
-                        colors = listOf(Color(0xFF1E2638), Color(0xFF12141C))
-                    )
-                )
-                .border(2.dp, Color(0x6632FFE4), CircleShape),
+                .size(80.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(DarkRaised)
+                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 painter = painterResource(id = R.drawable.ic_freeflow_logo),
                 contentDescription = "FreeFlow",
                 tint = Color.Unspecified,
-                modifier = Modifier.size(56.dp)
+                modifier = Modifier.size(46.dp)
             )
         }
 
@@ -328,7 +326,7 @@ private fun Step1Welcome(onNext: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Text(text = "Get Started", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Get Started", color = OnPrimaryBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -348,7 +346,7 @@ private fun Step2ApiKey(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Step 1: Connect Groq API",
+            text = "Connect Groq API",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -412,19 +410,20 @@ private fun Step2ApiKey(
             onClick = onTestAndSave,
             modifier = Modifier
                 .fillMaxWidth()
-                .height(48.dp),
+                .height(48.dp)
+                .border(1.dp, DarkCardBorder, RoundedCornerShape(12.dp)),
             enabled = apiKeyInput.isNotBlank() && !isTestingKey,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF242430)),
+            colors = ButtonDefaults.buttonColors(containerColor = DarkRaised),
             shape = RoundedCornerShape(12.dp)
         ) {
             if (isTestingKey) {
                 CircularProgressIndicator(modifier = Modifier.size(18.dp), color = PrimaryBlue, strokeWidth = 2.dp)
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Validating with Groq...", color = Color.White)
+                Text("Validating with Groq...", color = TextPrimary)
             } else {
                 Icon(imageVector = Icons.Default.Key, contentDescription = "Test", tint = PrimaryBlue, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
-                Text("Test & Save Key", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Test & Save Key", color = TextPrimary, fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -451,7 +450,7 @@ private fun Step2ApiKey(
         ) {
             Text(
                 text = if (isKeyValid) "Continue to Permissions" else "Continue",
-                color = Color.Black,
+                color = OnPrimaryBlue,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -471,7 +470,7 @@ private fun Step3Permissions(
 ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Text(
-            text = "Step 2: Permissions Setup",
+            text = "Permissions Setup",
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -529,7 +528,7 @@ private fun Step3Permissions(
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Text(text = "Next: Final Step", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Continue", color = OnPrimaryBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -544,24 +543,24 @@ private fun Step4Ready(onFinish: () -> Unit) {
 
         Box(
             modifier = Modifier
-                .size(90.dp)
-                .shadow(elevation = 16.dp, shape = CircleShape)
-                .clip(CircleShape)
-                .background(Color(0xFF00E676)),
+                .size(76.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(DarkRaised)
+                .border(1.dp, DarkCardBorder, RoundedCornerShape(20.dp)),
             contentAlignment = Alignment.Center
         ) {
             Icon(
                 imageVector = Icons.Default.Check,
-                contentDescription = "Success",
-                tint = Color.Black,
-                modifier = Modifier.size(50.dp)
+                contentDescription = "Ready",
+                tint = AccentGreen,
+                modifier = Modifier.size(38.dp)
             )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
 
         Text(
-            text = "You're All Set!",
+            text = "Ready to Dictate",
             fontSize = 26.sp,
             fontWeight = FontWeight.Bold,
             color = TextPrimary
@@ -570,7 +569,7 @@ private fun Step4Ready(onFinish: () -> Unit) {
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
-            text = "FreeFlow is now ready. Here is how to use it:",
+            text = "FreeFlow is configured. Here is how to use it across your device:",
             fontSize = 14.sp,
             color = TextSecondary,
             textAlign = TextAlign.Center
@@ -588,19 +587,19 @@ private fun Step4Ready(onFinish: () -> Unit) {
         ) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text(
-                    text = "• Home Screen: Tap the big microphone to dictate into FreeFlow's notepad and copy or share text.",
+                    text = "• Home Screen: Tap the central microphone to transcribe notes directly into the notepad.",
                     fontSize = 13.sp,
                     color = TextPrimary,
                     lineHeight = 18.sp
                 )
                 Text(
-                    text = "• Floating Bubble: A discreet mic icon floats at your screen edge. Tap once to talk, tap the green tick to finish and inject text.",
+                    text = "• Floating Bubble: A discreet capsule docks to your screen edge. Tap to dictate into any active app.",
                     fontSize = 13.sp,
                     color = TextPrimary,
                     lineHeight = 18.sp
                 )
                 Text(
-                    text = "• Quick Settings: Swipe down from the top of your phone and tap the FreeFlow tile for instant voice dictation.",
+                    text = "• Quick Settings: Pull down the Android notification shade and tap the FreeFlow tile for quick access.",
                     fontSize = 13.sp,
                     color = TextPrimary,
                     lineHeight = 18.sp
@@ -618,7 +617,7 @@ private fun Step4Ready(onFinish: () -> Unit) {
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             shape = RoundedCornerShape(14.dp)
         ) {
-            Text(text = "Enter FreeFlow", color = Color.Black, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+            Text(text = "Enter FreeFlow", color = OnPrimaryBlue, fontSize = 16.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -643,7 +642,7 @@ private fun FeatureHighlightItem(
             modifier = Modifier
                 .size(42.dp)
                 .clip(CircleShape)
-                .background(Color(0xFF1E2638)),
+                .background(DarkRaisedSubtle),
             contentAlignment = Alignment.Center
         ) {
             Icon(imageVector = icon, contentDescription = title, tint = PrimaryBlue, modifier = Modifier.size(22.dp))
@@ -669,7 +668,7 @@ private fun PermissionSetupCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(DarkCard)
-            .border(1.dp, if (isGranted) Color(0x4400E676) else DarkCardBorder, RoundedCornerShape(14.dp))
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(14.dp))
             .padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
@@ -685,10 +684,10 @@ private fun PermissionSetupCard(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(10.dp))
-                    .background(Color(0x3300E676))
+                    .background(AccentGreen.copy(alpha = 0.15f))
                     .padding(horizontal = 10.dp, vertical = 6.dp)
             ) {
-                Text(text = "Granted ✓", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Text(text = "Granted", color = AccentGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
             }
         } else {
             Button(
@@ -697,7 +696,7 @@ private fun PermissionSetupCard(
                 shape = RoundedCornerShape(10.dp),
                 modifier = Modifier.height(36.dp)
             ) {
-                Text(text = actionLabel, color = Color.Black, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text(text = actionLabel, color = OnPrimaryBlue, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
     }

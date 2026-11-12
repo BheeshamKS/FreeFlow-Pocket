@@ -114,10 +114,12 @@ import com.bheeshamks.freeflow.ui.theme.AccentRed
 import com.bheeshamks.freeflow.ui.theme.DarkBackground
 import com.bheeshamks.freeflow.ui.theme.DarkCard
 import com.bheeshamks.freeflow.ui.theme.DarkCardBorder
+import com.bheeshamks.freeflow.ui.theme.DarkRaised
+import com.bheeshamks.freeflow.ui.theme.DarkRaisedSubtle
+import com.bheeshamks.freeflow.ui.theme.OnPrimaryBlue
 import com.bheeshamks.freeflow.ui.theme.PrimaryBlue
 import com.bheeshamks.freeflow.ui.theme.TextPrimary
 import com.bheeshamks.freeflow.ui.theme.TextSecondary
-import kotlinx.coroutines.launch
 
 /**
  * Dedicated sub-tabs for organizing FreeFlow Settings cleanly.
@@ -244,12 +246,13 @@ fun SettingsScreen(
                 .horizontalScroll(rememberScrollState()),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            SettingsSubTab.values().forEach { tab ->
+            SettingsSubTab.entries.forEach { tab ->
                 val isSelected = activeTab == tab
                 Box(
                     modifier = Modifier
                         .clip(RoundedCornerShape(20.dp))
-                        .background(if (isSelected) PrimaryBlue else Color(0xFF1E1E26))
+                        .background(if (isSelected) PrimaryBlue else DarkRaised)
+                        .border(1.dp, if (isSelected) PrimaryBlue else DarkCardBorder, RoundedCornerShape(20.dp))
                         .clickable { activeTab = tab }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     contentAlignment = Alignment.Center
@@ -261,12 +264,12 @@ fun SettingsScreen(
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
-                            tint = if (isSelected) Color.White else TextSecondary,
+                            tint = if (isSelected) OnPrimaryBlue else TextSecondary,
                             modifier = Modifier.size(16.dp)
                         )
                         Text(
                             text = tab.title,
-                            color = if (isSelected) Color.White else TextSecondary,
+                            color = if (isSelected) OnPrimaryBlue else TextSecondary,
                             fontSize = 13.sp,
                             fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                         )
@@ -453,7 +456,7 @@ fun SettingsScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue)
                 ) {
-                    Text("Restore", color = Color.White)
+                    Text("Restore", color = OnPrimaryBlue)
                 }
             },
             dismissButton = {
@@ -531,7 +534,7 @@ private fun VoiceApiTabContent(
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Save Key", color = Color.White, fontWeight = FontWeight.SemiBold)
+                Text("Save Key", color = OnPrimaryBlue, fontWeight = FontWeight.SemiBold)
             }
 
             OutlinedButton(
@@ -686,16 +689,16 @@ private fun KeyboardStudioTabContent(
         icon = Icons.Default.Layers
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            KeyboardTheme.values().forEach { theme ->
+            KeyboardTheme.entries.forEach { theme ->
                 val isSelected = settings.keyboardTheme == theme
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) Color(0x335AB4FF) else Color(0xFF1B1B22))
+                        .background(if (isSelected) Color(0x335AB4FF) else DarkRaised)
                         .border(
                             width = if (isSelected) 1.dp else 0.5.dp,
-                            color = if (isSelected) PrimaryBlue else Color(0x22FFFFFF),
+                            color = if (isSelected) PrimaryBlue else DarkCardBorder,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clickable { scope.launch { preferences.updateKeyboardTheme(theme) } }
@@ -743,13 +746,14 @@ private fun KeyboardStudioTabContent(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            KeyBorderStyle.values().forEach { borderStyle ->
+            KeyBorderStyle.entries.forEach { borderStyle ->
                 val isSelected = settings.borderStyle == borderStyle
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) PrimaryBlue else Color(0xFF1E1E26))
+                        .background(if (isSelected) PrimaryBlue else DarkRaised)
+                        .border(1.dp, if (isSelected) PrimaryBlue else DarkCardBorder, RoundedCornerShape(8.dp))
                         .clickable { scope.launch { preferences.updateBorderStyle(borderStyle) } }
                         .padding(vertical = 10.dp, horizontal = 4.dp),
                     contentAlignment = Alignment.Center
@@ -757,7 +761,7 @@ private fun KeyboardStudioTabContent(
                     Text(
                         text = borderStyle.displayName,
                         fontSize = 11.sp,
-                        color = if (isSelected) Color.White else TextSecondary,
+                        color = if (isSelected) OnPrimaryBlue else TextSecondary,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
@@ -797,12 +801,12 @@ private fun KeyboardStudioTabContent(
                     .horizontalScroll(rememberScrollState()),
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                BloomColorPreset.values().forEach { preset ->
+                BloomColorPreset.entries.forEach { preset ->
                     val isSelected = settings.colorPreset == preset
                     Box(
                         modifier = Modifier
                             .clip(RoundedCornerShape(20.dp))
-                            .background(if (isSelected) Color(preset.primaryColor).copy(alpha = 0.25f) else Color(0xFF1E1E26))
+                            .background(if (isSelected) Color(preset.primaryColor).copy(alpha = 0.25f) else DarkRaised)
                             .border(
                                 width = if (isSelected) 1.5.dp else 0.5.dp,
                                 color = if (isSelected) Color(preset.primaryColor) else Color.Transparent,
@@ -824,13 +828,13 @@ private fun KeyboardStudioTabContent(
             Spacer(modifier = Modifier.height(8.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                BloomAnimationStyle.values().forEach { style ->
+                BloomAnimationStyle.entries.forEach { style ->
                     val isSelected = settings.animationStyle == style
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (isSelected) Color(0x335AB4FF) else Color(0xFF1B1B22))
+                            .background(if (isSelected) Color(0x335AB4FF) else DarkRaised)
                             .clickable { scope.launch { preferences.updateAnimationStyle(style) } }
                             .padding(horizontal = 12.dp, vertical = 8.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -912,13 +916,13 @@ private fun KeyboardStudioTabContent(
         Spacer(modifier = Modifier.height(8.dp))
 
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            HapticStrength.values().forEach { strength ->
+            HapticStrength.entries.forEach { strength ->
                 val isSelected = settings.hapticStrength == strength
                 Box(
                     modifier = Modifier
                         .weight(1f)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(if (isSelected) PrimaryBlue else Color(0xFF1E1E26))
+                        .background(if (isSelected) PrimaryBlue else DarkRaised)
                         .clickable { scope.launch { preferences.updateHapticStrength(strength) } }
                         .padding(vertical = 8.dp),
                     contentAlignment = Alignment.Center
@@ -926,7 +930,7 @@ private fun KeyboardStudioTabContent(
                     Text(
                         text = strength.displayName.split(" ").first(),
                         fontSize = 11.sp,
-                        color = if (isSelected) Color.White else TextSecondary,
+                        color = if (isSelected) OnPrimaryBlue else TextSecondary,
                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal
                     )
                 }
@@ -947,16 +951,16 @@ private fun KeyboardStudioTabContent(
         Spacer(modifier = Modifier.height(12.dp))
 
         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            KeySoundTheme.values().forEach { soundTheme ->
+            KeySoundTheme.entries.forEach { soundTheme ->
                 val isSelected = settings.soundTheme == soundTheme
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .clip(RoundedCornerShape(10.dp))
-                        .background(if (isSelected) Color(0x335AB4FF) else Color(0xFF1B1B22))
+                        .background(if (isSelected) Color(0x335AB4FF) else DarkRaised)
                         .border(
                             width = if (isSelected) 1.dp else 0.5.dp,
-                            color = if (isSelected) PrimaryBlue else Color(0x22FFFFFF),
+                            color = if (isSelected) PrimaryBlue else DarkCardBorder,
                             shape = RoundedCornerShape(10.dp)
                         )
                         .clickable {
@@ -1021,7 +1025,7 @@ private fun KeyboardStudioTabContent(
         ) {
             Text("FreeFlow IME Status", color = TextPrimary, fontSize = 13.sp)
             Text(
-                text = if (isKeyboardEnabled) "Enabled ✓" else "Not Enabled",
+                text = if (isKeyboardEnabled) "Enabled" else "Not Enabled",
                 color = if (isKeyboardEnabled) AccentGreen else AccentRed,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.SemiBold
@@ -1033,10 +1037,10 @@ private fun KeyboardStudioTabContent(
         Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Button(
                 onClick = onEnableKeyboard,
-                colors = ButtonDefaults.buttonColors(containerColor = if (isKeyboardEnabled) Color(0xFF282832) else PrimaryBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isKeyboardEnabled) DarkRaised else PrimaryBlue),
                 modifier = Modifier.weight(1f)
             ) {
-                Text(if (isKeyboardEnabled) "Manage IMEs" else "Enable Keyboard", fontSize = 12.sp, color = if (isKeyboardEnabled) TextPrimary else Color.White)
+                Text(if (isKeyboardEnabled) "Manage IMEs" else "Enable Keyboard", fontSize = 12.sp, color = if (isKeyboardEnabled) TextPrimary else OnPrimaryBlue)
             }
 
             Button(
@@ -1044,7 +1048,7 @@ private fun KeyboardStudioTabContent(
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                 modifier = Modifier.weight(1f)
             ) {
-                Text("Select Keyboard", fontSize = 12.sp, color = Color.White)
+                Text("Select Keyboard", fontSize = 12.sp, color = OnPrimaryBlue)
             }
         }
     }
@@ -1138,7 +1142,7 @@ private fun WisprBubbleTabContent(
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(10.dp))
-                .background(Color(0xFF16161E))
+                .background(DarkRaised)
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -1148,11 +1152,11 @@ private fun WisprBubbleTabContent(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BubbleMock(text = "✖ Cancel", color = Color(0xFFFF5252))
+                BubbleMock(text = "Cancel", color = AccentRed)
                 Spacer(modifier = Modifier.width(6.dp))
-                BubbleMock(text = "〰 Waveform", color = PrimaryBlue)
+                BubbleMock(text = "Waveform", color = PrimaryBlue)
                 Spacer(modifier = Modifier.width(6.dp))
-                BubbleMock(text = "✔ Done", color = AccentGreen)
+                BubbleMock(text = "Done", color = AccentGreen)
             }
 
             Spacer(modifier = Modifier.height(4.dp))
@@ -1162,11 +1166,11 @@ private fun WisprBubbleTabContent(
                 horizontalArrangement = Arrangement.Start,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                BubbleMock(text = "✔ Done", color = AccentGreen)
+                BubbleMock(text = "Done", color = AccentGreen)
                 Spacer(modifier = Modifier.width(6.dp))
-                BubbleMock(text = "〰 Waveform", color = PrimaryBlue)
+                BubbleMock(text = "Waveform", color = PrimaryBlue)
                 Spacer(modifier = Modifier.width(6.dp))
-                BubbleMock(text = "✖ Cancel", color = Color(0xFFFF5252))
+                BubbleMock(text = "Cancel", color = AccentRed)
             }
         }
     }
@@ -1184,17 +1188,17 @@ private fun WisprBubbleTabContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text("Accessibility Service", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
                 Text(
-                    text = if (isAccessibilityEnabled) "Service Enabled ✓" else "Service Disabled (Required)",
+                    text = if (isAccessibilityEnabled) "Service Enabled" else "Service Disabled (Required)",
                     fontSize = 11.sp,
                     color = if (isAccessibilityEnabled) AccentGreen else AccentRed
                 )
             }
             Button(
                 onClick = onEnableAccessibility,
-                colors = ButtonDefaults.buttonColors(containerColor = if (isAccessibilityEnabled) Color(0xFF282832) else PrimaryBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isAccessibilityEnabled) DarkRaised else PrimaryBlue),
                 modifier = Modifier.height(34.dp)
             ) {
-                Text(if (isAccessibilityEnabled) "Settings" else "Enable", fontSize = 12.sp, color = if (isAccessibilityEnabled) TextPrimary else Color.White)
+                Text(if (isAccessibilityEnabled) "Settings" else "Enable", fontSize = 12.sp, color = if (isAccessibilityEnabled) TextPrimary else OnPrimaryBlue)
             }
         }
 
@@ -1209,17 +1213,17 @@ private fun WisprBubbleTabContent(
             Column(modifier = Modifier.weight(1f)) {
                 Text("Display Over Other Apps", fontSize = 13.sp, color = TextPrimary, fontWeight = FontWeight.Medium)
                 Text(
-                    text = if (isOverlayEnabled) "Permission Granted ✓" else "Permission Required",
+                    text = if (isOverlayEnabled) "Permission Granted" else "Permission Required",
                     fontSize = 11.sp,
                     color = if (isOverlayEnabled) AccentGreen else AccentRed
                 )
             }
             Button(
                 onClick = onEnableOverlay,
-                colors = ButtonDefaults.buttonColors(containerColor = if (isOverlayEnabled) Color(0xFF282832) else PrimaryBlue),
+                colors = ButtonDefaults.buttonColors(containerColor = if (isOverlayEnabled) DarkRaised else PrimaryBlue),
                 modifier = Modifier.height(34.dp)
             ) {
-                Text(if (isOverlayEnabled) "Settings" else "Grant", fontSize = 12.sp, color = if (isOverlayEnabled) TextPrimary else Color.White)
+                Text(if (isOverlayEnabled) "Settings" else "Grant", fontSize = 12.sp, color = if (isOverlayEnabled) TextPrimary else OnPrimaryBlue)
             }
         }
     }
@@ -1294,11 +1298,11 @@ private fun SystemPermissionsTabContent(
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF14241B))
-                    .border(1.dp, Color(0xFF00E676).copy(alpha = 0.4f), RoundedCornerShape(8.dp))
+                    .background(AccentGreen.copy(alpha = 0.15f))
+                    .border(1.dp, AccentGreen.copy(alpha = 0.4f), RoundedCornerShape(8.dp))
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             ) {
-                Text("Updatable", color = Color(0xFF00E676), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                Text("Updatable", color = AccentGreen, fontSize = 11.sp, fontWeight = FontWeight.Bold)
             }
         }
 
@@ -1321,7 +1325,7 @@ private fun SystemPermissionsTabContent(
                 onClick = onBackupSettings,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3A48))
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardBorder)
             ) {
                 Text("Backup Settings", fontSize = 12.sp)
             }
@@ -1329,7 +1333,7 @@ private fun SystemPermissionsTabContent(
                 onClick = onRestoreSettings,
                 modifier = Modifier.weight(1f),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = TextPrimary),
-                border = androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF3A3A48))
+                border = androidx.compose.foundation.BorderStroke(1.dp, DarkCardBorder)
             ) {
                 Text("Restore Settings", fontSize = 12.sp)
             }
@@ -1347,9 +1351,9 @@ private fun SystemPermissionsTabContent(
             colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
             modifier = Modifier.fillMaxWidth()
         ) {
-            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = Color.White)
+            Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = OnPrimaryBlue)
             Spacer(modifier = Modifier.width(6.dp))
-            Text("Check for Updates / Releases", color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            Text("Check for Updates / Releases", color = OnPrimaryBlue, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
         }
     }
 
@@ -1380,7 +1384,7 @@ private fun SystemPermissionsTabContent(
 
         Button(
             onClick = onReplayOnboarding,
-            colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF282832)),
+            colors = ButtonDefaults.buttonColors(containerColor = DarkRaised),
             modifier = Modifier.fillMaxWidth()
         ) {
             Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(16.dp), tint = TextPrimary)
@@ -1454,7 +1458,7 @@ private fun PermissionStatusRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(title, color = TextPrimary, fontSize = 13.sp, fontWeight = FontWeight.Medium)
             Text(
-                text = if (isGranted) "Granted ✓" else subtitle,
+                text = if (isGranted) "Granted" else subtitle,
                 color = if (isGranted) AccentGreen else TextSecondary,
                 fontSize = 11.sp
             )
@@ -1465,7 +1469,7 @@ private fun PermissionStatusRow(
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryBlue),
                 modifier = Modifier.height(32.dp)
             ) {
-                Text(actionLabel, fontSize = 11.sp, color = Color.White)
+                Text(actionLabel, fontSize = 11.sp, color = OnPrimaryBlue)
             }
         } else {
             Icon(Icons.Default.CheckCircle, contentDescription = null, tint = AccentGreen, modifier = Modifier.size(20.dp))

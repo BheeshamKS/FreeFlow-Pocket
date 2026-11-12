@@ -56,11 +56,15 @@ import com.bheeshamks.freeflow.core.data.db.DictationDao
 import com.bheeshamks.freeflow.core.data.db.DictationEntity
 import com.bheeshamks.freeflow.ui.theme.AccentGreen
 import com.bheeshamks.freeflow.ui.theme.AccentRed
+import com.bheeshamks.freeflow.ui.theme.DarkBackground
 import com.bheeshamks.freeflow.ui.theme.DarkCard
 import com.bheeshamks.freeflow.ui.theme.DarkCardBorder
+import com.bheeshamks.freeflow.ui.theme.DarkRaised
+import com.bheeshamks.freeflow.ui.theme.MonospaceTabular
 import com.bheeshamks.freeflow.ui.theme.PrimaryBlue
 import com.bheeshamks.freeflow.ui.theme.TextPrimary
 import com.bheeshamks.freeflow.ui.theme.TextSecondary
+import com.bheeshamks.freeflow.ui.theme.TextTertiary
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -89,8 +93,8 @@ fun HistoryScreen(
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF000000))
-            .padding(horizontal = 20.dp, vertical = 24.dp)
+            .background(DarkBackground)
+            .padding(horizontal = 20.dp, vertical = 16.dp)
     ) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -99,14 +103,14 @@ fun HistoryScreen(
         ) {
             Column {
                 Text(
-                    text = "Local History",
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
+                    text = "History",
+                    fontSize = 24.sp,
+                    fontWeight = FontWeight.SemiBold,
                     color = TextPrimary
                 )
                 Text(
-                    text = "100% on-device private SQLite database",
-                    fontSize = 13.sp,
+                    text = "On-device transcription archive",
+                    fontSize = 12.sp,
                     color = TextSecondary
                 )
             }
@@ -115,8 +119,8 @@ fun HistoryScreen(
                 IconButton(onClick = { showClearConfirmDialog = true }) {
                     Icon(
                         imageVector = Icons.Default.DeleteSweep,
-                        contentDescription = "Clear All",
-                        tint = AccentRed
+                        contentDescription = "Clear all",
+                        tint = TextSecondary
                     )
                 }
             }
@@ -127,10 +131,10 @@ fun HistoryScreen(
         // Metrics Banner
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(10.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             MetricPill(
-                title = "Total Words",
+                title = "Total words",
                 value = (totalWords ?: 0).toString(),
                 icon = Icons.Default.TextFields,
                 accentColor = PrimaryBlue,
@@ -138,7 +142,7 @@ fun HistoryScreen(
             )
 
             MetricPill(
-                title = "Avg Latency",
+                title = "Average latency",
                 value = "${(avgLatency ?: 0.0).toInt()}ms",
                 icon = Icons.Default.Speed,
                 accentColor = AccentGreen,
@@ -152,21 +156,23 @@ fun HistoryScreen(
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Search your transcriptions...") },
+            placeholder = { Text("Search transcriptions", color = TextTertiary, fontSize = 14.sp) },
             leadingIcon = {
-                Icon(Icons.Default.Search, contentDescription = "Search", tint = TextSecondary)
+                Icon(Icons.Default.Search, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(18.dp))
             },
             singleLine = true,
+            shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedBorderColor = PrimaryBlue,
                 unfocusedBorderColor = DarkCardBorder,
                 focusedTextColor = TextPrimary,
-                unfocusedTextColor = TextPrimary
+                unfocusedTextColor = TextPrimary,
+                cursorColor = PrimaryBlue
             ),
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(14.dp))
+        Spacer(modifier = Modifier.height(12.dp))
 
         // List of Dictations
         if (dictations.isEmpty()) {
@@ -177,8 +183,8 @@ fun HistoryScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = if (searchQuery.isBlank()) "No voice dictations yet.\nTap the floating bubble or keyboard mic to dictate!" else "No matching results found.",
-                    color = TextSecondary,
+                    text = if (searchQuery.isBlank()) "No transcriptions yet" else "No matching results",
+                    color = TextTertiary,
                     fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center
                 )
@@ -186,7 +192,7 @@ fun HistoryScreen(
         } else {
             LazyColumn(
                 modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(dictations, key = { it.id }) { item ->
                     DictationCard(
@@ -210,8 +216,8 @@ fun HistoryScreen(
     if (showClearConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showClearConfirmDialog = false },
-            title = { Text("Clear All Dictations?", color = TextPrimary) },
-            text = { Text("This will permanently remove all stored dictation history from this device.", color = TextSecondary) },
+            title = { Text("Clear dictations", color = TextPrimary, fontWeight = FontWeight.SemiBold) },
+            text = { Text("Permanently delete stored history on this device?", color = TextSecondary, fontSize = 13.sp) },
             confirmButton = {
                 Button(
                     onClick = {
@@ -220,9 +226,10 @@ fun HistoryScreen(
                             showClearConfirmDialog = false
                         }
                     },
-                    colors = ButtonDefaults.buttonColors(containerColor = AccentRed)
+                    colors = ButtonDefaults.buttonColors(containerColor = AccentRed),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text("Delete All", color = Color.White)
+                    Text("Delete all", color = Color.White)
                 }
             },
             dismissButton = {
@@ -230,7 +237,8 @@ fun HistoryScreen(
                     Text("Cancel", color = TextSecondary)
                 }
             },
-            containerColor = Color(0xFF18181C)
+            containerColor = DarkCard,
+            shape = RoundedCornerShape(14.dp)
         )
     }
 }
@@ -255,14 +263,14 @@ private fun MetricPill(
                 modifier = Modifier
                     .size(32.dp)
                     .clip(CircleShape)
-                    .background(accentColor.copy(alpha = 0.15f)),
+                    .background(DarkRaised),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(18.dp))
+                Icon(imageVector = icon, contentDescription = null, tint = accentColor, modifier = Modifier.size(16.dp))
             }
             Spacer(modifier = Modifier.width(10.dp))
             Column {
-                Text(text = value, fontSize = 18.sp, fontWeight = FontWeight.Bold, color = TextPrimary)
+                Text(text = value, style = MonospaceTabular.copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold, color = TextPrimary))
                 Text(text = title, fontSize = 11.sp, color = TextSecondary)
             }
         }
@@ -281,10 +289,10 @@ private fun DictationCard(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(DarkCard)
-            .border(1.dp, DarkCardBorder, RoundedCornerShape(14.dp))
-            .padding(14.dp)
+            .border(1.dp, DarkCardBorder, RoundedCornerShape(12.dp))
+            .padding(12.dp)
     ) {
         Column {
             Row(
@@ -295,12 +303,11 @@ private fun DictationCard(
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         text = "${entity.latencyMs}ms",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = PrimaryBlue,
+                        style = MonospaceTabular.copy(fontSize = 11.sp, color = PrimaryBlue),
                         modifier = Modifier
                             .clip(RoundedCornerShape(4.dp))
-                            .background(Color(0x225AB4FF))
+                            .background(DarkRaised)
+                            .border(1.dp, DarkCardBorder, RoundedCornerShape(4.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                     Spacer(modifier = Modifier.width(8.dp))
@@ -313,12 +320,11 @@ private fun DictationCard(
 
                 Text(
                     text = formattedDate,
-                    fontSize = 11.sp,
-                    color = TextSecondary
+                    style = MonospaceTabular.copy(fontSize = 11.sp, color = TextTertiary)
                 )
             }
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text = entity.text,
@@ -327,30 +333,30 @@ private fun DictationCard(
                 color = TextPrimary
             )
 
-            Spacer(modifier = Modifier.height(10.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onCopy, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = onCopy, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Default.ContentCopy,
                         contentDescription = "Copy",
-                        tint = PrimaryBlue,
-                        modifier = Modifier.size(18.dp)
+                        tint = TextSecondary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
-                IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
                     Icon(
                         imageVector = Icons.Default.Delete,
                         contentDescription = "Delete",
-                        tint = Color(0xFF888894),
-                        modifier = Modifier.size(18.dp)
+                        tint = TextTertiary,
+                        modifier = Modifier.size(16.dp)
                     )
                 }
             }
